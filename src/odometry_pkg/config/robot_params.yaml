@@ -1,0 +1,249 @@
+robot_state_publisher:
+  ros__parameters:
+    robot_description: |-
+      <?xml version="1.0"?>
+      <robot name="mecanum_robot">
+        <!-- Materials -->
+        <material name="chassis_color">
+          <color rgba="0.1 0.4 0.8 1.0"/>
+        </material>
+        <material name="wheel_color">
+          <color rgba="0.1 0.1 0.1 1.0"/>
+        </material>
+
+        <!-- Base link: simple box (root of the tree) -->
+        <link name="base_link">
+          <visual>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <geometry>
+              <box size="0.40 0.30 0.10"/>
+            </geometry>
+            <material name="chassis_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <geometry>
+              <box size="0.40 0.30 0.10"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <!-- Wheels: cylinders rotated so their axis matches the wheel axle -->
+        <link name="wheel_fl">
+          <visual>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="wheel_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <link name="wheel_fr">
+          <visual>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="wheel_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <link name="wheel_rr">
+          <visual>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="wheel_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <link name="wheel_rl">
+          <visual>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="wheel_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <!-- Wheel joints (continuous) -->
+        <joint name="wheel_fl_joint" type="continuous">
+          <origin xyz="0.15 0.125 0.05" rpy="0 0 0"/>
+          <axis xyz="0 1 0"/>
+          <parent link="base_link"/>
+          <child link="wheel_fl"/>
+        </joint>
+
+        <joint name="wheel_fr_joint" type="continuous">
+          <origin xyz="0.15 -0.125 0.05" rpy="0 0 0"/>
+          <axis xyz="0 1 0"/>
+          <parent link="base_link"/>
+          <child link="wheel_fr"/>
+        </joint>
+
+        <joint name="wheel_rr_joint" type="continuous">
+          <origin xyz="-0.15 -0.125 0.05" rpy="0 0 0"/>
+          <axis xyz="0 1 0"/>
+          <parent link="base_link"/>
+          <child link="wheel_rr"/>
+        </joint>
+
+        <joint name="wheel_rl_joint" type="continuous">
+          <origin xyz="-0.15 0.125 0.05" rpy="0 0 0"/>
+          <axis xyz="0 1 0"/>
+          <parent link="base_link"/>
+          <child link="wheel_rl"/>
+        </joint>
+      </robot>
+
+position_velocity_approximator:
+  ros__parameters:
+    robot_description: |-
+      <?xml version="1.0"?>
+      <robot name="mecanum_robot">
+        <!-- Materials -->
+        <material name="chassis_color">
+          <color rgba="0.1 0.4 0.8 1.0"/>
+        </material>
+        <material name="wheel_color">
+          <color rgba="0.1 0.1 0.1 1.0"/>
+        </material>
+
+        <!-- Base link: simple box (root of the tree) -->
+        <link name="base_link">
+          <visual>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <geometry>
+              <box size="0.40 0.30 0.10"/>
+            </geometry>
+            <material name="chassis_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0.05" rpy="0 0 0"/>
+            <geometry>
+              <box size="0.40 0.30 0.10"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <!-- Wheels: cylinders rotated so their axis matches the wheel axle -->
+        <link name="wheel_fl">
+          <visual>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="wheel_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <link name="wheel_fr">
+          <visual>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="wheel_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <link name="wheel_rr">
+          <visual>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="wheel_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <link name="wheel_rl">
+          <visual>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+            <material name="wheel_color"/>
+          </visual>
+          <collision>
+            <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+              <mesh filename="package://odometry_pkg/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+            </geometry>
+          </collision>
+        </link>
+
+        <!-- Wheel joints (continuous) -->
+        <joint name="wheel_fl_joint" type="continuous">
+          <origin xyz="0.15 0.125 0.05" rpy="0 0 0"/>
+          <axis xyz="0 1 0"/>
+          <parent link="base_link"/>
+          <child link="wheel_fl"/>
+        </joint>
+
+        <joint name="wheel_fr_joint" type="continuous">
+          <origin xyz="0.15 -0.125 0.05" rpy="0 0 0"/>
+          <axis xyz="0 1 0"/>
+          <parent link="base_link"/>
+          <child link="wheel_fr"/>
+        </joint>
+
+        <joint name="wheel_rr_joint" type="continuous">
+          <origin xyz="-0.15 -0.125 0.05" rpy="0 0 0"/>
+          <axis xyz="0 1 0"/>
+          <parent link="base_link"/>
+          <child link="wheel_rr"/>
+        </joint>
+
+        <joint name="wheel_rl_joint" type="continuous">
+          <origin xyz="-0.15 0.125 0.05" rpy="0 0 0"/>
+          <axis xyz="0 1 0"/>
+          <parent link="base_link"/>
+          <child link="wheel_rl"/>
+        </joint>
+      </robot>

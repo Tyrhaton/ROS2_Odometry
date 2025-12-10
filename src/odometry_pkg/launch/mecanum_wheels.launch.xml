@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Arguments -->
+  <arg name="database_path" default="mecanum_test.db"
+       description="Path to SQLite database file" />
+  <arg name="wheel_radius" default="0.05"
+       description="Wheel radius in meters" />
+  <arg name="wheel_base_x" default="0.30"
+       description="Distance between front and rear wheels (lx)" />
+  <arg name="wheel_base_y" default="0.25"
+       description="Distance between left and right wheels (ly)" />
+  <arg name="motion_mode" default="circle"
+       description="Motion mode: forward, rotation, diagonal, circle, polynomial" />
+  <arg name="use_rviz" default="true"
+       description="Launch RVIZ2 for visualization" />
+
+  <let name="pkg_share" value="$(find-pkg-share odometry_pkg)" />
+  <let name="rviz_config" value="$(var pkg_share)/rviz/odometry_visualization.rviz" />
+  <let name="urdf_path" value="$(var pkg_share)/urdf/mecanum_robot.urdf" />
+
+  <!-- Joint State Publisher (zeroed joints so wheel TFs exist) -->
+  <node pkg="joint_state_publisher" exec="joint_state_publisher" name="joint_state_publisher" output="screen">
+    <!-- Wrap URDF in quotes so YAML parser treats it as a single string -->
+    <param name="robot_description" value="'$(command 'cat $(var urdf_path)')'" />
+    <param name="use_gui" value="false" />
+  </node>
+
+  <!-- Robot State Publisher -->
+  <node pkg="robot_state_publisher" exec="robot_state_publisher" name="robot_state_publisher" output="screen">
+    <param name="robot_description" value="'$(command 'cat $(var urdf_path)')'" />
+  </node>
+
+  <!-- Wheel encoder simulator -->
+  <node pkg="odometry_pkg" exec="wheel_encoder_simulator.py" name="wheel_encoder_simulator" output="screen">
+    <param name="publish_rate_hz" value="50" />
+    <param name="forward_velocity" value="5.0" />
+    <param name="rotation_velocity" value="1.0" />
+    <param name="noise_std" value="0.05" />
+    <param name="motion_mode" value="$(var motion_mode)" />
+  </node>
+
+  <!-- Mecanum wheel position approximator -->
+  <node pkg="odometry_pkg" exec="mecanum_position_approximator" name="mecanum_position_approximator" output="screen">
+    <param name="initial_x" value="0.0" />
+    <param name="initial_y" value="0.0" />
+    <param name="initial_alpha" value="0.0" />
+    <param name="wheel_radius" value="$(var wheel_radius)" />
+    <param name="wheel_base_x" value="$(var wheel_base_x)" />
+    <param name="wheel_base_y" value="$(var wheel_base_y)" />
+  </node>
+
+  <!-- Database handler -->
+  <node pkg="odometry_pkg" exec="database_handler" name="database_handler" output="screen">
+    <param name="database_path" value="$(var database_path)" />
+    <param name="subscribe_imu" value="false" />
+    <param name="subscribe_acceleration" value="false" />
+    <param name="subscribe_velocity" value="true" />
+    <param name="subscribe_position" value="true" />
+    <remap from="/odometry/velocity_from_accel" to="/odometry/velocity_from_wheels" />
+    <remap from="/odometry/position_from_accel" to="/odometry/position_from_wheels" />
+  </node>
+
+  <!-- Position visualizer -->
+  <node pkg="odometry_pkg" exec="position_visualizer.py" name="position_visualizer" output="screen">
+    <remap from="/odometry/position_from_accel" to="/odometry/position_from_wheels" />
+    <param name="use_mesh" value="true" />
+    <param name="mesh_scale" value="0.001" />
+  </node>
+
+  <!-- RVIZ2 visualization (slight delay to let description/markers latch) -->
+  <timer period="0.2" if="$(var use_rviz)">
+    <node pkg="rviz2" exec="rviz2" name="rviz2" output="screen"
+          args="-d $(var rviz_config)" />
+  </timer>
+</launch>

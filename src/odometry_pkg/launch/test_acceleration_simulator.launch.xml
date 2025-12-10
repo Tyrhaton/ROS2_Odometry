@@ -1,0 +1,29 @@
+<launch>
+  <!-- Arguments -->
+  <arg name="database_path" default="acceleration_test.db"
+       description="Path to SQLite database file" />
+
+  <!-- Sensor data simulator (acceleration mode) -->
+  <node pkg="odometry_pkg" exec="sensor_data_simulator" name="sensor_data_simulator" output="screen">
+    <param name="data_type" value="acceleration" />
+    <param name="publish_rate_hz" value="50" />
+    <param name="interpolation_mode" value="constant" />
+    <param name="amplitude" value="0.5" />
+  </node>
+
+  <!-- Position and velocity approximator -->
+  <node pkg="odometry_pkg" exec="position_velocity_approximator" name="position_velocity_approximator" output="screen">
+    <param name="initial_x" value="0.0" />
+    <param name="initial_y" value="0.0" />
+    <param name="initial_alpha" value="0.0" />
+  </node>
+
+  <!-- Database handler -->
+  <node pkg="odometry_pkg" exec="database_handler" name="database_handler" output="screen">
+    <param name="database_path" value="$(var database_path)" />
+    <param name="subscribe_imu" value="true" />
+    <param name="subscribe_acceleration" value="false" />
+    <param name="subscribe_velocity" value="true" />
+    <param name="subscribe_position" value="true" />
+  </node>
+</launch>

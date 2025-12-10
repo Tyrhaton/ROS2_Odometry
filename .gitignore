@@ -1,0 +1,5 @@
+/build
+/install
+/log
+*.db
+*.db-journal
