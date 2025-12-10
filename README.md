@@ -8,4 +8,20 @@ ROS 2 workspace for experimenting with odometry estimation and visualization on 
 - Launch files for a simulated wheel workflow and an ESP32 IMU workflow, both wiring in robot_state_publisher, the visualizer, and an optional RViz session.
 - A SQLite database handler for logging wheel/IMU velocity and position topics during runs.
 
-Use the Python or XML launch variants to start either the mecanum wheel simulation or the ESP32 IMU pipeline, then inspect TF, path, and mesh overlays in RViz.
+Use the XML launch variants to start either the mecanum wheel simulation or the ESP32 IMU pipeline, then inspect TF, path, and mesh overlays in RViz.
+
+## Running
+
+Go to the `scripts` folder
+
+### Run using real IMU Sensor data
+
+```bash
+./run.sh
+```
+
+### Run in a simulation
+
+```bash
+run_simulation.sh
+```
