@@ -6,4 +6,4 @@ colcon build
 
 source install/setup.bash
 # ros2 launch odometry_pkg test_acceleration_simulator.launch.xml
-ros2 launch odometry_pkg esp32_imu_position.launch.xml
+ros2 launch odometry_pkg mecanum_wheels.launch.xml
