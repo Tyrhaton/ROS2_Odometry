@@ -1,0 +1,66 @@
+# IMU Simulator Path Configuration Examples
+#
+# You can define custom motion paths using these parameters:
+# - path_times: Time points defining when phases start/end (seconds)
+# - path_velocities_x: Forward velocity at each time point (m/s)
+# - path_velocities_y: Lateral velocity (strafe) at each time point (m/s)
+# - path_rotations: Angular velocity at each time point (rad/s)
+#
+# The simulator will automatically calculate required accelerations
+# to smoothly transition between the velocity setpoints.
+
+# Example 1: Stop-and-Go (default)
+# Drive forward 5s, stop for 5s, then continue
+stop_and_go:
+  path_times: [ 0.0, 5.0, 6.0, 11.0, 12.0, 90.0 ]
+  path_velocities_x: [ 0.5, 0.5, 0.0, 0.0, 0.5, 0.5 ] # m/s
+  path_velocities_y: [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ] # m/s
+  path_rotations: [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ] # rad/s
+
+# Example 2: Forward with rotation (circular path)
+# Drive forward while rotating continuously
+circular_path:
+  path_times: [ 0.0, 20.0, 40.0 ]
+  path_velocities_x: [ 0.5, 0.5, 0.5 ] # Constant forward speed
+  path_velocities_y: [ 0.0, 0.0, 0.0 ] # No lateral movement
+  path_rotations: [ 0.3, 0.3, 0.3 ] # Constant rotation (creates circle)
+
+# Example 3: Square pattern
+# Drive forward, turn 90°, repeat
+square_pattern:
+  path_times: [ 0.0, 3.0, 5.0, 8.0, 10.0, 13.0, 15.0, 18.0, 20.0 ]
+  path_velocities_x: [ 0.5, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0 ]
+  path_velocities_y: [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ]
+  path_rotations: [ 0.0, 0.0, 1.57, 0.0, 1.57, 0.0, 1.57, 0.0, 1.57 ] # 90° turns
+
+# Example 4: Strafe motion (mecanum specific)
+# Move sideways using mecanum wheels
+strafe_pattern:
+  path_times: [ 0.0, 5.0, 10.0, 15.0, 20.0 ]
+  path_velocities_x: [ 0.0, 0.0, 0.0, 0.0, 0.0 ] # No forward movement
+  path_velocities_y: [ 0.3, 0.3, 0.0, -0.3, 0.0 ] # Strafe right, stop, strafe left
+  path_rotations: [ 0.0, 0.0, 0.0, 0.0, 0.0 ] # No rotation
+
+# Example 5: Complex path with all motions
+# Combine forward, lateral, and rotation
+complex_path:
+  path_times: [ 0.0, 5.0, 10.0, 15.0, 20.0, 25.0 ]
+  path_velocities_x: [ 0.5, 0.5, 0.3, 0.0, 0.5, 0.0 ] # Forward with varying speed
+  path_velocities_y: [ 0.0, 0.2, 0.2, 0.0, 0.0, 0.0 ] # Add lateral movement
+  path_rotations: [ 0.0, 0.0, 0.5, 0.5, 0.0, 0.0 ] # Rotate while moving
+
+# Example 6: Acceleration test
+# Test different acceleration profiles
+acceleration_test:
+  path_times: [ 0.0, 2.0, 5.0, 8.0, 10.0, 15.0 ]
+  path_velocities_x: [ 0.0, 0.5, 0.5, 1.0, 1.0, 0.0 ] # Accelerate, cruise, accelerate, stop
+  path_velocities_y: [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ]
+  path_rotations: [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ]
+
+# Example 7: Figure-8 pattern (approximation)
+# Alternate left and right turns
+figure_eight:
+  path_times: [ 0.0, 6.0, 12.0, 18.0, 24.0 ]
+  path_velocities_x: [ 0.5, 0.5, 0.5, 0.5, 0.5 ] # Constant forward
+  path_velocities_y: [ 0.0, 0.0, 0.0, 0.0, 0.0 ]
+  path_rotations: [ 0.5, 0.5, -0.5, -0.5, 0.0 ] # Turn left, then right
