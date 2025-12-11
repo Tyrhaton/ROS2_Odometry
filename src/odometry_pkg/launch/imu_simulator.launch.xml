@@ -57,7 +57,7 @@
     <param name="path_times" value="[0.0, 5.0, 8.0, 13.0, 16.0, 21.0, 25.0]" />
     <param name="path_velocities_x" value="[0.3, 0.3, 0.0, 0.0, 0.3, 0.3, 0.3]" />
     <param name="path_velocities_y" value="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]" />
-    <param name="path_rotations" value="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]" />
+    <param name="path_rotations" value="[0.0, 0.0, 0.314, 0.0, 0.0, 0.0, 0.0]" />
   </node>
 
   <!-- Position and velocity approximator (to integrate IMU data) -->
@@ -67,6 +67,12 @@
     <param name="initial_alpha" value="$(var initial_alpha)" />
     <param name="wheel_base_x" value="$(var wheel_base_x)" />
     <param name="wheel_base_y" value="$(var wheel_base_y)" />
+    <!-- Much lower velocity damping for rapid stopping when static (0.2 = 80% reduction per frame @ 50Hz) -->
+    <param name="velocity_damping" value="0.2" />
+    <!-- Higher gyro threshold to allow ZUPT during slow rotations (0.35 > 0.314 rad/s rotation) -->
+    <param name="static_gyro_threshold" value="0.35" />
+    <!-- Fast ZUPT activation: 5 frames = 0.1 seconds to lock velocity to zero when static -->
+    <param name="zupt_count_threshold" value="5" />
   </node>
 
   <!-- Database handler -->

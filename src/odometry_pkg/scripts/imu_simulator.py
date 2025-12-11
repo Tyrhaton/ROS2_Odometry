@@ -149,9 +149,9 @@ class IMUSimulator(Node):
             t_end = self.path_times[i + 1]
             dt = t_end - t_start
             
-            # Target velocities for this interval
-            v_x_target = self.path_velocities_x[i + 1]
-            v_y_target = self.path_velocities_y[i + 1]
+            # Target velocities for this interval (use current phase, not next!)
+            v_x_target = self.path_velocities_x[i]
+            v_y_target = self.path_velocities_y[i]
             omega_target = self.path_rotations[i]
             
             # Store target velocities to force-set at phase boundaries
