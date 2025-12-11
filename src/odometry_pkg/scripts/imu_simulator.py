@@ -136,7 +136,7 @@ class IMUSimulator(Node):
         Calculates required accelerations to transition between velocity setpoints.
         
         Returns:
-            List of (start_time, end_time, type, coeffs_x, coeffs_y, omega) tuples
+            List of (start_time, end_time, type, coeffs_x, coeffs_y, omega, target_vx, target_vy) tuples
         """
         intervals = []
         
@@ -150,25 +150,13 @@ class IMUSimulator(Node):
             dt = t_end - t_start
             
             # Target velocities for this interval
-            v_x_start = self.path_velocities_x[i]
-            v_x_end = self.path_velocities_x[i + 1]
-            v_y_start = self.path_velocities_y[i]
-            v_y_end = self.path_velocities_y[i + 1]
-            omega_start = self.path_rotations[i]
-            omega_end = self.path_rotations[i + 1]
+            v_x_target = self.path_velocities_x[i + 1]
+            v_y_target = self.path_velocities_y[i + 1]
+            omega_target = self.path_rotations[i]
             
-            # Calculate required accelerations for smooth transitions
-            if dt > 0:
-                # Use constant acceleration to reach target velocity
-                a_x = (v_x_end - v_x_start) / dt
-                a_y = (v_y_end - v_y_start) / dt
-                alpha = (omega_end - omega_start) / dt  # angular acceleration
-            else:
-                a_x = 0.0
-                a_y = 0.0
-                alpha = 0.0
-            
-            intervals.append((t_start, t_end, 'constant', [a_x], [a_y], omega_start))
+            # Store target velocities to force-set at phase boundaries
+            # The actual acceleration will be calculated dynamically based on current velocity
+            intervals.append((t_start, t_end, 'constant', v_x_target, v_y_target, omega_target))
         
         return intervals
     
@@ -289,34 +277,22 @@ class IMUSimulator(Node):
         Returns:
             Tuple of (ax, ay, omega) - linear accelerations and angular velocity
         """
-        for start, end, poly_type, coeffs_x, coeffs_y, omega in self.acceleration_intervals:
+        for start, end, poly_type, target_vx, target_vy, omega in self.acceleration_intervals:
             if start <= t <= end:
-                # Time relative to interval start
-                t_rel = t - start
+                dt_interval = end - start
                 
-                if poly_type == 'constant':
-                    ax = coeffs_x[0]
-                    ay = coeffs_y[0]
-                elif poly_type == 'linear':
-                    # a(t) = a*t + b
-                    a_x = coeffs_x[0]
-                    b_x = coeffs_x[1] if len(coeffs_x) > 1 else 0.0
-                    ax = a_x * t_rel + b_x
+                # Calculate acceleration needed to reach target velocity from current velocity
+                # Use a reasonable transition time (1 second or the interval duration, whichever is shorter)
+                transition_time = min(1.0, dt_interval)
+                
+                if transition_time > 0:
+                    ax = (target_vx - self.current_velocity_x) / transition_time
+                    ay = (target_vy - self.current_velocity_y) / transition_time
                     
-                    a_y = coeffs_y[0]
-                    b_y = coeffs_y[1] if len(coeffs_y) > 1 else 0.0
-                    ay = a_y * t_rel + b_y
-                elif poly_type == 'quadratic':
-                    # a(t) = a*t² + b*t + c
-                    a_x = coeffs_x[0]
-                    b_x = coeffs_x[1] if len(coeffs_x) > 1 else 0.0
-                    c_x = coeffs_x[2] if len(coeffs_x) > 2 else 0.0
-                    ax = a_x * t_rel * t_rel + b_x * t_rel + c_x
-                    
-                    a_y = coeffs_y[0]
-                    b_y = coeffs_y[1] if len(coeffs_y) > 1 else 0.0
-                    c_y = coeffs_y[2] if len(coeffs_y) > 2 else 0.0
-                    ay = a_y * t_rel * t_rel + b_y * t_rel + c_y
+                    # Limit acceleration to reasonable values
+                    max_accel = 2.0  # m/s²
+                    ax = max(-max_accel, min(max_accel, ax))
+                    ay = max(-max_accel, min(max_accel, ay))
                 else:
                     ax = 0.0
                     ay = 0.0
