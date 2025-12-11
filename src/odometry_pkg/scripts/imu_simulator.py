@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
 """
-IMU Simulator - Clean implementation without drift
+IMU Simulator - Configurable motion paths
 
-Motion pattern:
-- Drive forward for 5 seconds
-- Stop completely
-- Rotate 90 degrees in place
-- Drive forward again in new direction
+Supports two modes:
+1. Simple mode: forward_velocity, forward_duration, rotation_angle parameters
+2. Custom path mode: path_times, path_velocities_x, path_velocities_y, path_rotations arrays
 
-Key fix: During stopped phases, output EXACTLY zero acceleration (no noise)
-to allow ZUPT to work properly.
+The simulator outputs acceleration data that integrates correctly to the target velocities.
+During stopped phases, outputs exactly zero to allow ZUPT drift correction.
 """
 
 import rclpy
 from rclpy.node import Node
+from rclpy.parameter import Parameter
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from sensor_msgs.msg import Imu, JointState
 from odometry_interfaces_pkg.msg import AccelerationData, PositionData
 import math
-import random
 from dataclasses import dataclass
-from typing import Tuple, Optional
+from typing import Tuple, List
+import ast
 
 
 @dataclass
 class MotionState:
     """Current motion state"""
-    vx: float = 0.0  # Body frame velocity X
-    vy: float = 0.0  # Body frame velocity Y
+    vx: float = 0.0  # Target velocity X (body frame)
+    vy: float = 0.0  # Target velocity Y (body frame)
     omega: float = 0.0  # Angular velocity
     ax: float = 0.0  # Acceleration X
     ay: float = 0.0  # Acceleration Y
@@ -39,17 +39,29 @@ class IMUSimulator(Node):
 
         # Declare parameters
         self.declare_parameter('publish_rate_hz', 50)
-        self.declare_parameter('noise_std', 0.0005)
         self.declare_parameter('initial_position_x', 0.0)
         self.declare_parameter('initial_position_y', 0.0)
         self.declare_parameter('initial_alpha', 0.0)
         self.declare_parameter('cycle_time', 30.0)
+        self.declare_parameter('transition_time', 0.5)  # Time for velocity transitions
 
-        # Motion parameters
+        # Simple mode parameters
         self.declare_parameter('forward_velocity', 0.3)
         self.declare_parameter('forward_duration', 5.0)
-        self.declare_parameter('rotation_angle', 1.5708)  # 90 degrees
-        self.declare_parameter('transition_time', 0.5)
+        self.declare_parameter('rotation_angle', 1.5708)
+        self.declare_parameter('rotation_duration', 3.0)
+
+        # Custom path mode parameters (if provided, overrides simple mode)
+        # Times are the START times of each phase
+        # Use ParameterDescriptor with DOUBLE_ARRAY type for proper type inference
+        double_array_descriptor = ParameterDescriptor(
+            type=ParameterType.PARAMETER_DOUBLE_ARRAY,
+            description='Array of double values'
+        )
+        self.declare_parameter('path_times', Parameter.Type.DOUBLE_ARRAY)
+        self.declare_parameter('path_velocities_x', Parameter.Type.DOUBLE_ARRAY)
+        self.declare_parameter('path_velocities_y', Parameter.Type.DOUBLE_ARRAY)
+        self.declare_parameter('path_rotations', Parameter.Type.DOUBLE_ARRAY)
 
         # Robot geometry
         self.declare_parameter('wheel_radius', 0.05)
@@ -58,16 +70,21 @@ class IMUSimulator(Node):
 
         # Get parameters
         self.rate_hz = self.get_parameter('publish_rate_hz').value
-        self.noise_std = self.get_parameter('noise_std').value
         self.initial_position_x = self.get_parameter('initial_position_x').value
         self.initial_position_y = self.get_parameter('initial_position_y').value
         self.initial_alpha = self.get_parameter('initial_alpha').value
         self.cycle_time = self.get_parameter('cycle_time').value
+        self.transition_time = self.get_parameter('transition_time').value
 
         self.forward_velocity = self.get_parameter('forward_velocity').value
         self.forward_duration = self.get_parameter('forward_duration').value
         self.rotation_angle = self.get_parameter('rotation_angle').value
-        self.transition_time = self.get_parameter('transition_time').value
+        self.rotation_duration = self.get_parameter('rotation_duration').value
+
+        self.path_times = self._parse_array_param('path_times')
+        self.path_velocities_x = self._parse_array_param('path_velocities_x')
+        self.path_velocities_y = self._parse_array_param('path_velocities_y')
+        self.path_rotations = self._parse_array_param('path_rotations')
 
         self.wheel_radius = self.get_parameter('wheel_radius').value
         self.wheel_base_x = self.get_parameter('wheel_base_x').value
@@ -75,21 +92,21 @@ class IMUSimulator(Node):
 
         # Calculate derived values
         self.dt = 1.0 / self.rate_hz
-        self.rotation_duration = 3.0  # Time to complete 90 degree rotation
 
-        # IMPORTANT: With trapezoidal velocity profile, total angle = omega * (duration - transition_time)
-        # So: omega = rotation_angle / (rotation_duration - transition_time)
-        # This accounts for the ramp-up and ramp-down phases
-        effective_rotation_time = self.rotation_duration - self.transition_time
-        self.rotation_omega = self.rotation_angle / effective_rotation_time
+        # Check if custom path mode
+        self.use_custom_path = (len(self.path_times) > 0 and
+                                len(self.path_velocities_x) > 0)
 
         # Build timeline
-        self._build_timeline()
+        if self.use_custom_path:
+            self._build_custom_timeline()
+        else:
+            self._build_simple_timeline()
 
-        # State tracking for visualization
-        self.ground_truth_vx = 0.0
-        self.ground_truth_vy = 0.0
-        self.ground_truth_omega = 0.0
+        # State tracking
+        self.current_vx = 0.0
+        self.current_vy = 0.0
+        self.current_omega = 0.0
         self.wheel_angles = [0.0, 0.0, 0.0, 0.0]
 
         # Publishers
@@ -102,119 +119,201 @@ class IMUSimulator(Node):
         self.timer = self.create_timer(self.dt, self.publish_imu_data)
         self.sim_time = 0.0
 
-        # Send initial reset after short delay
+        # Send initial reset
         self.initial_reset_timer = self.create_timer(0.5, self.send_initial_reset)
 
         self.get_logger().info(f'IMU Simulator started @ {self.rate_hz} Hz')
+        if self.use_custom_path:
+            self.get_logger().info('Using CUSTOM PATH mode')
+            self.get_logger().info(f'  path_times: {self.path_times}')
+            self.get_logger().info(f'  path_velocities_x: {self.path_velocities_x}')
+            self.get_logger().info(f'  path_velocities_y: {self.path_velocities_y}')
+            self.get_logger().info(f'  path_rotations: {self.path_rotations}')
+        else:
+            self.get_logger().info('Using SIMPLE mode')
         self._log_timeline()
 
-    def _build_timeline(self):
-        """
-        Build motion timeline with exact phase boundaries.
+    def _parse_array_param(self, param_name: str) -> List[float]:
+        """Parse array parameter - handles both list and string formats"""
+        try:
+            param = self.get_parameter(param_name)
+            value = param.value
+        except Exception:
+            # Parameter not initialized
+            return []
 
-        Timeline structure: list of (end_time, phase_name, motion_func)
-        """
+        # If None or not set
+        if value is None:
+            return []
+
+        # If already a list, return it
+        if isinstance(value, (list, tuple)):
+            result = [float(x) for x in value if x is not None]
+            return result
+
+        # If string, try to parse it
+        if isinstance(value, str):
+            value = value.strip()
+            if value == '' or value == '[]':
+                return []
+            try:
+                parsed = ast.literal_eval(value)
+                if isinstance(parsed, (list, tuple)):
+                    return [float(x) for x in parsed]
+            except (ValueError, SyntaxError) as e:
+                self.get_logger().warn(f'Failed to parse {param_name}: {value} - {e}')
+                return []
+
+        return []
+
+    def _build_custom_timeline(self):
+        """Build timeline from custom path parameters"""
+        self.timeline = []
+        t_trans = self.transition_time
+
+        # Ensure arrays have same length
+        n = min(len(self.path_times), len(self.path_velocities_x))
+        if len(self.path_velocities_y) < n:
+            self.path_velocities_y = [0.0] * n
+        if len(self.path_rotations) < n:
+            self.path_rotations = [0.0] * n
+
+        # Add init wait phase
+        init_wait = 1.0
+        self.timeline.append({
+            'end_time': init_wait,
+            'name': 'INIT_WAIT',
+            'target_vx': 0.0,
+            'target_vy': 0.0,
+            'target_omega': 0.0,
+            'is_stopped': True
+        })
+
+        # Process each phase from the path arrays
+        for i in range(n - 1):
+            t_start = self.path_times[i] + init_wait
+            t_end = self.path_times[i + 1] + init_wait
+
+            vx_target = self.path_velocities_x[i]
+            vy_target = self.path_velocities_y[i] if i < len(self.path_velocities_y) else 0.0
+            omega_target = self.path_rotations[i] if i < len(self.path_rotations) else 0.0
+
+            # Determine if this is a stopped phase
+            is_stopped = (abs(vx_target) < 0.001 and
+                         abs(vy_target) < 0.001 and
+                         abs(omega_target) < 0.001)
+
+            self.timeline.append({
+                'end_time': t_end,
+                'name': f'PHASE_{i+1}',
+                'target_vx': vx_target,
+                'target_vy': vy_target,
+                'target_omega': omega_target,
+                'is_stopped': is_stopped
+            })
+
+        # Add final phase (stays at last velocity forever or until cycle)
+        if n > 0:
+            last_vx = self.path_velocities_x[-1]
+            last_vy = self.path_velocities_y[-1] if len(self.path_velocities_y) >= n else 0.0
+            last_omega = self.path_rotations[-1] if len(self.path_rotations) >= n else 0.0
+            is_stopped = (abs(last_vx) < 0.001 and abs(last_vy) < 0.001 and abs(last_omega) < 0.001)
+
+            self.timeline.append({
+                'end_time': float('inf'),
+                'name': 'FINAL',
+                'target_vx': last_vx,
+                'target_vy': last_vy,
+                'target_omega': last_omega,
+                'is_stopped': is_stopped
+            })
+
+        self.total_duration = self.path_times[-1] + init_wait if n > 0 else init_wait
+
+    def _build_simple_timeline(self):
+        """Build timeline for simple forward-rotate-forward motion"""
+        self.timeline = []
+
         v = self.forward_velocity
         t_trans = self.transition_time
         t_fwd = self.forward_duration
         t_rot = self.rotation_duration
-        omega = self.rotation_omega
 
-        # Calculate accelerations
-        accel = v / t_trans  # Acceleration magnitude
+        # Calculate rotation omega to achieve exact rotation_angle
+        effective_rotation_time = t_rot - t_trans
+        omega = self.rotation_angle / effective_rotation_time if effective_rotation_time > 0 else 0
 
         t = 0.0
-        self.timeline = []
 
-        # Phase 0: Wait for system initialization (reset happens at 0.5s)
-        t_end = 1.0  # Wait 1 second before starting motion
-        self.timeline.append((t_end, 'INIT_WAIT', lambda tt: MotionState(is_stopped=True)))
+        # Phase 0: Init wait
+        t_end = 1.0
+        self.timeline.append({
+            'end_time': t_end,
+            'name': 'INIT_WAIT',
+            'target_vx': 0.0, 'target_vy': 0.0, 'target_omega': 0.0,
+            'is_stopped': True
+        })
         t = t_end
 
-        # Phase 1: Accelerate forward (0 -> v)
-        t_end = t + t_trans
-        self.timeline.append((t_end, 'ACCELERATE_1', lambda tt, te=t_end, ts=t: self._accel_phase(tt, ts, te, 0, v)))
+        # Phase 1: Drive forward
+        t_end = t + t_fwd
+        self.timeline.append({
+            'end_time': t_end,
+            'name': 'DRIVE_1',
+            'target_vx': v, 'target_vy': 0.0, 'target_omega': 0.0,
+            'is_stopped': False
+        })
         t = t_end
 
-        # Phase 2: Constant velocity forward
-        t_end = t + (t_fwd - t_trans)
-        self.timeline.append((t_end, 'DRIVE_1', lambda tt: MotionState(vx=v, is_stopped=False)))
-        t = t_end
-
-        # Phase 3: Decelerate to stop (v -> 0)
-        t_end = t + t_trans
-        self.timeline.append((t_end, 'DECELERATE_1', lambda tt, te=t_end, ts=t: self._accel_phase(tt, ts, te, v, 0)))
-        t = t_end
-
-        # Phase 4: Stopped before rotation
+        # Phase 2: Stop before rotation
         t_end = t + 0.5
-        self.timeline.append((t_end, 'STOPPED_1', lambda tt: MotionState(is_stopped=True)))
+        self.timeline.append({
+            'end_time': t_end,
+            'name': 'STOP_1',
+            'target_vx': 0.0, 'target_vy': 0.0, 'target_omega': 0.0,
+            'is_stopped': True
+        })
         t = t_end
 
-        # Phase 5: Accelerate rotation (0 -> omega)
-        t_end = t + t_trans
-        self.timeline.append((t_end, 'ROTATE_ACCEL', lambda tt, te=t_end, ts=t: self._rotate_accel_phase(tt, ts, te, 0, omega)))
+        # Phase 3: Rotate
+        t_end = t + t_rot
+        self.timeline.append({
+            'end_time': t_end,
+            'name': 'ROTATE',
+            'target_vx': 0.0, 'target_vy': 0.0, 'target_omega': omega,
+            'is_stopped': False
+        })
         t = t_end
 
-        # Phase 6: Constant rotation
-        t_end = t + (t_rot - 2 * t_trans)
-        self.timeline.append((t_end, 'ROTATING', lambda tt: MotionState(omega=omega, is_stopped=False)))
-        t = t_end
-
-        # Phase 7: Decelerate rotation (omega -> 0)
-        t_end = t + t_trans
-        self.timeline.append((t_end, 'ROTATE_DECEL', lambda tt, te=t_end, ts=t: self._rotate_accel_phase(tt, ts, te, omega, 0)))
-        t = t_end
-
-        # Phase 8: Stopped after rotation
+        # Phase 4: Stop after rotation
         t_end = t + 0.5
-        self.timeline.append((t_end, 'STOPPED_2', lambda tt: MotionState(is_stopped=True)))
+        self.timeline.append({
+            'end_time': t_end,
+            'name': 'STOP_2',
+            'target_vx': 0.0, 'target_vy': 0.0, 'target_omega': 0.0,
+            'is_stopped': True
+        })
         t = t_end
 
-        # Phase 9: Accelerate forward again (0 -> v)
-        t_end = t + t_trans
-        self.timeline.append((t_end, 'ACCELERATE_2', lambda tt, te=t_end, ts=t: self._accel_phase(tt, ts, te, 0, v)))
+        # Phase 5: Drive forward again
+        t_end = t + t_fwd
+        self.timeline.append({
+            'end_time': t_end,
+            'name': 'DRIVE_2',
+            'target_vx': v, 'target_vy': 0.0, 'target_omega': 0.0,
+            'is_stopped': False
+        })
         t = t_end
 
-        # Phase 10: Constant velocity forward
-        t_end = t + (t_fwd - t_trans)
-        self.timeline.append((t_end, 'DRIVE_2', lambda tt: MotionState(vx=v, is_stopped=False)))
-        t = t_end
-
-        # Phase 11: Final decelerate (v -> 0)
-        t_end = t + t_trans
-        self.timeline.append((t_end, 'DECELERATE_2', lambda tt, te=t_end, ts=t: self._accel_phase(tt, ts, te, v, 0)))
-        t = t_end
-
-        # Phase 12: Final stop (forever)
-        self.timeline.append((float('inf'), 'DONE', lambda tt: MotionState(is_stopped=True)))
+        # Phase 6: Final stop
+        self.timeline.append({
+            'end_time': float('inf'),
+            'name': 'DONE',
+            'target_vx': 0.0, 'target_vy': 0.0, 'target_omega': 0.0,
+            'is_stopped': True
+        })
 
         self.total_duration = t
-
-    def _accel_phase(self, t: float, t_start: float, t_end: float, v_start: float, v_end: float) -> MotionState:
-        """Linear acceleration phase for forward motion"""
-        dt_phase = t_end - t_start
-        progress = (t - t_start) / dt_phase if dt_phase > 0 else 1.0
-        progress = max(0.0, min(1.0, progress))
-
-        # Constant acceleration: a = (v_end - v_start) / dt
-        accel = (v_end - v_start) / dt_phase if dt_phase > 0 else 0.0
-
-        # Current velocity: v = v_start + a * (t - t_start)
-        current_v = v_start + accel * (t - t_start)
-
-        return MotionState(vx=current_v, ax=accel, is_stopped=False)
-
-    def _rotate_accel_phase(self, t: float, t_start: float, t_end: float, omega_start: float, omega_end: float) -> MotionState:
-        """Linear angular acceleration phase"""
-        dt_phase = t_end - t_start
-        progress = (t - t_start) / dt_phase if dt_phase > 0 else 1.0
-        progress = max(0.0, min(1.0, progress))
-
-        # Current angular velocity (linear interpolation)
-        current_omega = omega_start + (omega_end - omega_start) * progress
-
-        return MotionState(omega=current_omega, is_stopped=False)
 
     def _log_timeline(self):
         """Log the motion timeline"""
@@ -222,16 +321,21 @@ class IMUSimulator(Node):
         self.get_logger().info('Motion Timeline:')
 
         t_prev = 0.0
-        for t_end, name, _ in self.timeline:
+        for phase in self.timeline:
+            t_end = phase['end_time']
+            name = phase['name']
+            vx = phase['target_vx']
+            vy = phase['target_vy']
+            omega = phase['target_omega']
+
             if t_end == float('inf'):
-                self.get_logger().info(f'  {t_prev:.1f}s - inf: {name}')
+                self.get_logger().info(f'  {t_prev:.1f}s - inf: {name} (vx={vx:.2f}, vy={vy:.2f}, ω={omega:.2f})')
             else:
-                self.get_logger().info(f'  {t_prev:.1f}s - {t_end:.1f}s: {name}')
+                self.get_logger().info(f'  {t_prev:.1f}s - {t_end:.1f}s: {name} (vx={vx:.2f}, vy={vy:.2f}, ω={omega:.2f})')
             t_prev = t_end
             if t_end == float('inf'):
                 break
 
-        self.get_logger().info(f'Total active duration: {self.total_duration:.1f}s')
         self.get_logger().info('=' * 50)
 
     def send_initial_reset(self):
@@ -244,42 +348,75 @@ class IMUSimulator(Node):
         reset_msg.initial_vx = 0.0
         reset_msg.initial_vy = 0.0
         self.reset_pub.publish(reset_msg)
-        self.get_logger().info(f'Initial reset: ({self.initial_position_x}, {self.initial_position_y}), alpha={self.initial_alpha}')
+        self.get_logger().info(f'Initial reset: ({self.initial_position_x}, {self.initial_position_y})')
         self.initial_reset_timer.cancel()
         self.destroy_timer(self.initial_reset_timer)
 
-    def get_motion_state(self, t: float) -> Tuple[str, MotionState]:
-        """Get motion state at time t"""
-        t_prev = 0.0
-        for t_end, name, func in self.timeline:
-            if t < t_end:
-                return name, func(t)
-            t_prev = t_end
+    def get_phase_at_time(self, t: float) -> dict:
+        """Get the phase configuration at time t"""
+        for phase in self.timeline:
+            if t < phase['end_time']:
+                return phase
+        return self.timeline[-1]
 
-        # Default: stopped
-        return 'DONE', MotionState(is_stopped=True)
+    def compute_acceleration(self, target_vx: float, target_vy: float,
+                            target_omega: float) -> Tuple[float, float, float]:
+        """
+        Compute acceleration needed to reach target velocity from current velocity.
+        Uses constant acceleration over transition_time.
+        """
+        t_trans = self.transition_time
+
+        # Calculate required accelerations
+        if t_trans > 0:
+            ax = (target_vx - self.current_vx) / t_trans
+            ay = (target_vy - self.current_vy) / t_trans
+        else:
+            ax = 0.0
+            ay = 0.0
+
+        # Limit accelerations to reasonable values
+        max_accel = 2.0  # m/s²
+        ax = max(-max_accel, min(max_accel, ax))
+        ay = max(-max_accel, min(max_accel, ay))
+
+        # Angular velocity is set directly (gyro measures angular velocity, not acceleration)
+        omega = target_omega
+
+        return ax, ay, omega
+
+    def update_current_velocity(self, ax: float, ay: float, target_vx: float,
+                                target_vy: float, target_omega: float):
+        """Update current velocity based on acceleration"""
+        # Integrate acceleration
+        self.current_vx += ax * self.dt
+        self.current_vy += ay * self.dt
+        self.current_omega = target_omega
+
+        # Clamp to target when close (prevents overshoot)
+        if abs(ax) < 0.01:
+            self.current_vx = target_vx
+        if abs(ay) < 0.01:
+            self.current_vy = target_vy
 
     def publish_joint_state(self):
         """Publish joint states for wheel visualization"""
-        vx = self.ground_truth_vx
-        vy = self.ground_truth_vy
-        omega = self.ground_truth_omega
+        vx = self.current_vx
+        vy = self.current_vy
+        omega = self.current_omega
 
         lx = self.wheel_base_x / 2.0
         ly = self.wheel_base_y / 2.0
         k = lx + ly
 
         # Mecanum wheel velocities
-        w1 = (vx - vy - k * omega) / self.wheel_radius  # FL
-        w2 = (vx + vy + k * omega) / self.wheel_radius  # FR
-        w3 = (vx - vy + k * omega) / self.wheel_radius  # RR
-        w4 = (vx + vy - k * omega) / self.wheel_radius  # RL
+        w1 = (vx - vy - k * omega) / self.wheel_radius
+        w2 = (vx + vy + k * omega) / self.wheel_radius
+        w3 = (vx - vy + k * omega) / self.wheel_radius
+        w4 = (vx + vy - k * omega) / self.wheel_radius
 
-        # Update angles
-        self.wheel_angles[0] += w1 * self.dt
-        self.wheel_angles[1] += w2 * self.dt
-        self.wheel_angles[2] += w3 * self.dt
-        self.wheel_angles[3] += w4 * self.dt
+        for i, w in enumerate([w1, w2, w3, w4]):
+            self.wheel_angles[i] += w * self.dt
 
         js = JointState()
         js.header.stamp = self.get_clock().now().to_msg()
@@ -293,34 +430,34 @@ class IMUSimulator(Node):
         # Handle cycling
         cycle_time = self.sim_time % self.cycle_time if self.cycle_time > 0 else self.sim_time
 
-        # Get current motion state
-        phase_name, state = self.get_motion_state(cycle_time)
+        # Get current phase
+        phase = self.get_phase_at_time(cycle_time)
+        target_vx = phase['target_vx']
+        target_vy = phase['target_vy']
+        target_omega = phase['target_omega']
+        is_stopped = phase['is_stopped']
 
-        # Get accelerations and angular velocity
-        ax = state.ax
-        ay = state.ay
-        omega = state.omega
+        # Compute acceleration to reach target velocity
+        ax, ay, omega = self.compute_acceleration(target_vx, target_vy, target_omega)
 
-        # CRITICAL: Output behavior depends on motion state
-        if state.is_stopped:
-            # During stopped phases, output EXACTLY zero to allow ZUPT to work
+        # Update internal velocity tracking
+        self.update_current_velocity(ax, ay, target_vx, target_vy, target_omega)
+
+        # Output behavior depends on motion state
+        if is_stopped:
+            # During stopped phases, output EXACTLY zero for ZUPT
             ax_out = 0.0
             ay_out = 0.0
             omega_out = 0.0
         else:
-            # During motion phases, output actual acceleration with tiny omega
-            # The small omega prevents ZUPT (gyro threshold 0.005) without affecting heading
-            # because it's alternating and averages to zero
             ax_out = ax
             ay_out = ay
-            # Small alternating omega that averages to zero but stays above ZUPT threshold
-            omega_indicator = 0.01 * (1 if (int(self.sim_time * 100) % 2 == 0) else -1)
-            omega_out = omega + omega_indicator if omega == 0 else omega
-
-        # Update ground truth for visualization
-        self.ground_truth_vx = state.vx
-        self.ground_truth_vy = state.vy
-        self.ground_truth_omega = state.omega
+            # Add small alternating omega indicator to prevent false ZUPT during constant velocity
+            if abs(omega) < 0.001 and (abs(target_vx) > 0.01 or abs(target_vy) > 0.01):
+                omega_indicator = 0.01 * (1 if (int(self.sim_time * 100) % 2 == 0) else -1)
+                omega_out = omega_indicator
+            else:
+                omega_out = omega
 
         # Get timestamp
         current_time = self.get_clock().now().to_msg()
@@ -354,9 +491,9 @@ class IMUSimulator(Node):
         # Log every 2 seconds
         if int(self.sim_time * 10) % 20 == 0 and self.sim_time > 0:
             self.get_logger().info(
-                f'[t={cycle_time:.1f}s] {phase_name}: '
-                f'a=({ax_out:.3f}, {ay_out:.3f}) m/s² | ω={omega_out:.3f} rad/s | '
-                f'v=({self.ground_truth_vx:.3f}, {self.ground_truth_vy:.3f}) m/s'
+                f'[t={cycle_time:.1f}s] {phase["name"]}: '
+                f'a=({ax_out:.3f}, {ay_out:.3f}) | ω={omega_out:.3f} | '
+                f'v=({self.current_vx:.2f}, {self.current_vy:.2f})'
             )
 
         self.sim_time += self.dt

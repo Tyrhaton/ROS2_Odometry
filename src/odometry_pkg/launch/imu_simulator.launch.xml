@@ -23,7 +23,7 @@
   <arg name="database_path" default="imu_test.db"
        description="Path to SQLite database file" />
 
-  <!-- Motion parameters -->
+  <!-- Motion parameters (Simple mode) -->
   <arg name="forward_velocity" default="0.3"
        description="Forward velocity in m/s" />
   <arg name="forward_duration" default="5.0"
@@ -32,6 +32,16 @@
        description="Rotation angle in radians (default: 90 degrees = pi/2)" />
   <arg name="transition_time" default="0.5"
        description="Time for acceleration/deceleration transitions" />
+
+  <!-- Custom path parameters (overrides simple mode if provided) -->
+  <arg name="path_times" default="[]"
+       description="Array of time points for each phase" />
+  <arg name="path_velocities_x" default="[]"
+       description="Array of X velocities for each phase" />
+  <arg name="path_velocities_y" default="[]"
+       description="Array of Y velocities for each phase" />
+  <arg name="path_rotations" default="[]"
+       description="Array of angular velocities for each phase" />
 
   <let name="pkg_share" value="$(find-pkg-share odometry_pkg)" />
   <let name="rviz_config" value="$(var pkg_share)/rviz/odometry_visualization.rviz" />
@@ -53,11 +63,16 @@
     <param name="wheel_radius" value="$(var wheel_radius)" />
     <param name="wheel_base_x" value="$(var wheel_base_x)" />
     <param name="wheel_base_y" value="$(var wheel_base_y)" />
-    <!-- Motion parameters -->
+    <!-- Motion parameters (Simple mode) -->
     <param name="forward_velocity" value="$(var forward_velocity)" />
     <param name="forward_duration" value="$(var forward_duration)" />
     <param name="rotation_angle" value="$(var rotation_angle)" />
     <param name="transition_time" value="$(var transition_time)" />
+    <!-- Custom path parameters -->
+    <param name="path_times" value="$(var path_times)" />
+    <param name="path_velocities_x" value="$(var path_velocities_x)" />
+    <param name="path_velocities_y" value="$(var path_velocities_y)" />
+    <param name="path_rotations" value="$(var path_rotations)" />
   </node>
 
   <!-- Position and velocity approximator with trapezoidal integration -->
