@@ -169,8 +169,9 @@ private:
             angular_velocity_z_ = 0.0;
         }
 
-        // Invalidate last time to restart integration
+        // Invalidate last time and previous acceleration to restart integration
         last_time_valid_ = false;
+        have_prev_accel_ = false;
     }
 
     /**
@@ -223,10 +224,10 @@ private:
         double accel_y_map = sin_alpha * accel_x_sensor + cos_alpha * accel_y_sensor;
         double accel_z_map = accel_z_compensated;
 
-        // Calculate acceleration magnitude (without gravity)
+        // Calculate acceleration magnitude for static detection
+        // IMPORTANT: Only use XY for 2D planar motion - Z has gravity compensation artifacts
         double accel_magnitude = std::sqrt(accel_x_map * accel_x_map +
-                                           accel_y_map * accel_y_map +
-                                           accel_z_map * accel_z_map);
+                                           accel_y_map * accel_y_map);
 
         // Calculate angular velocity magnitude
         double gyro_magnitude = std::abs(angular_vel_z);
@@ -234,6 +235,10 @@ private:
         // Detect if sensor is static (no significant movement)
         bool is_static = (accel_magnitude < static_accel_threshold_) &&
                          (gyro_magnitude < static_gyro_threshold_);
+
+        // Store old velocity for trapezoidal position integration
+        double old_velocity_x = velocity_x_;
+        double old_velocity_y = velocity_y_;
 
         if (enable_drift_correction_ && is_static) {
             // Increment static counter
@@ -272,28 +277,39 @@ private:
                 static_count_ = 0;
             }
 
-            // Normal integration when moving
-            // Integrate acceleration to get velocity (in map frame)
-            // v(t+dt) = v(t) + a(t) * dt
-            velocity_x_ += accel_x_map * dt;
-            velocity_y_ += accel_y_map * dt;
-            // Note: For 2D planar motion, we ignore Z-axis (no integration of vertical acceleration)
-            // velocity_z_ += accel_z_map * dt;
+            // ===== TRAPEZOIDAL INTEGRATION FOR VELOCITY =====
+            // v(t+dt) = v(t) + (a(t) + a(t+dt)) * dt / 2
+            // This is more accurate than Euler: v += a * dt
+            if (have_prev_accel_) {
+                velocity_x_ += (prev_accel_x_map_ + accel_x_map) * dt * 0.5;
+                velocity_y_ += (prev_accel_y_map_ + accel_y_map) * dt * 0.5;
+            } else {
+                // First sample: use simple Euler as fallback
+                velocity_x_ += accel_x_map * dt;
+                velocity_y_ += accel_y_map * dt;
+            }
             angular_velocity_z_ = angular_vel_z;  // Angular velocity from sensor
         }
 
-        // Integrate velocity to get position (in map frame)
-        // p(t+dt) = p(t) + v(t) * dt
-        // Acceleration already influences position through velocity integration;
-        // avoid adding the 0.5*a*dt^2 term to prevent double‑counting spikes.
-        position_x_ += velocity_x_ * dt;
-        position_y_ += velocity_y_ * dt;
-        // Note: For 2D planar motion, Z position remains constant (typically 0)
-        // position_z_ += velocity_z_ * dt + 0.5 * accel_z_map * dt * dt;
+        // ===== TRAPEZOIDAL INTEGRATION FOR POSITION =====
+        // p(t+dt) = p(t) + (v(t) + v(t+dt)) * dt / 2
+        // This is more accurate than Euler: p += v * dt
+        position_x_ += (old_velocity_x + velocity_x_) * dt * 0.5;
+        position_y_ += (old_velocity_y + velocity_y_) * dt * 0.5;
 
-        // Integrate angular velocity to get orientation
-        // alpha(t+dt) = alpha(t) + omega_z(t) * dt
-        alpha_ += angular_velocity_z_ * dt;
+        // ===== TRAPEZOIDAL INTEGRATION FOR ORIENTATION =====
+        // alpha(t+dt) = alpha(t) + (omega(t) + omega(t+dt)) * dt / 2
+        if (have_prev_accel_) {
+            alpha_ += (prev_angular_vel_z_ + angular_velocity_z_) * dt * 0.5;
+        } else {
+            alpha_ += angular_velocity_z_ * dt;
+        }
+
+        // Store current values for next iteration's trapezoidal integration
+        prev_accel_x_map_ = accel_x_map;
+        prev_accel_y_map_ = accel_y_map;
+        prev_angular_vel_z_ = angular_velocity_z_;
+        have_prev_accel_ = true;
 
         // Normalize alpha to [-pi, pi]
         alpha_ = std::atan2(std::sin(alpha_), std::cos(alpha_));
@@ -424,6 +440,13 @@ private:
     double alpha_;                                  ///< Current orientation [rad]
     double velocity_x_, velocity_y_, velocity_z_;  ///< Current velocity in map frame [m/s]
     double angular_velocity_z_;                     ///< Current angular velocity [rad/s]
+
+    // Previous values for trapezoidal integration
+    double prev_accel_x_map_{0.0};
+    double prev_accel_y_map_{0.0};
+    double prev_angular_vel_z_{0.0};
+    bool have_prev_accel_{false};
+
     // Wheel geometry
     double wheel_radius_;
     double lx_;
