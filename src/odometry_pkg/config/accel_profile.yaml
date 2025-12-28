@@ -1,0 +1,21 @@
+accel_profile:
+  loop: false
+  total_time: 80.0
+  total_distance: 5.0
+  segments:
+    - duration: 10.0
+      ax: 0.0
+      ay: 0.0
+      rotation: 0.0
+    - duration: 10.0
+      ax: 0.01
+      ay: 0.0
+      rotation: 0.0
+    - duration:
+      ax: 0.0
+      ay: 0.0
+      rotation: 0.0
+    - duration: 10.0
+      ax: -0.01
+      ay: 0.0
+      rotation: 0.0

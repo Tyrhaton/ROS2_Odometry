@@ -10,7 +10,9 @@
   <arg name="wheel_base_y" default="0.25"
        description="Distance between left and right wheels (ly)" />
   <arg name="motion_mode" default="circle"
-       description="Motion mode: forward, rotation, diagonal, circle, polynomial" />
+       description="Motion mode: forward, rotation, diagonal, circle, polynomial, accel_profile" />
+  <arg name="accel_profile_path" default="$(find-pkg-share odometry_pkg)/config/accel_profile.yaml"
+       description="YAML path for accel_profile mode" />
   <arg name="use_rviz" default="true"
        description="Launch RVIZ2 for visualization" />
 
@@ -37,6 +39,7 @@
     <param name="rotation_velocity" value="1.0" />
     <param name="noise_std" value="0.05" />
     <param name="motion_mode" value="$(var motion_mode)" />
+    <param name="accel_profile_path" value="$(var accel_profile_path)" />
   </node>
 
   <!-- Mecanum wheel position approximator -->
