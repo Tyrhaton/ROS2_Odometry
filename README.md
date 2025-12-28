@@ -23,6 +23,12 @@ colcon build --packages-select odometry_pkg
 source install/setup.zsh
 ros2 launch odometry_pkg imu_simulator.launch.xml
 ```
+or for bash:
+```bash
+colcon build --packages-select odometry_pkg
+source install/setup.bash
+ros2 launch odometry_pkg imu_simulator.launch.xml
+```
 
 ### Path Parameters
 
@@ -58,6 +64,44 @@ This example demonstrates a 7-phase motion path (45 seconds total):
 - Times are **start times**, not durations (e.g., phase 2 starts at t=5s, not after 5s)
 - Set `cycle_time` to match your last time value (45.0 in this example)
 - Ensure `initial_velocity` matches `path_velocities_x[0]` to prevent premature motion
+
+### Command Line Custom Paths
+
+You can pass custom path arrays directly via the command line:
+
+```bash
+# Square path (mecanum strafe motion)
+ros2 launch odometry_pkg imu_simulator.launch.xml \
+  path_times:="[0.0, 3.0, 6.0, 9.0, 12.0]" \
+  path_velocities_x:="[0.3, 0.0, -0.3, 0.0, 0.0]" \
+  path_velocities_y:="[0.0, 0.3, 0.0, -0.3, 0.0]" \
+  path_rotations:="[0.0, 0.0, 0.0, 0.0, 0.0]"
+
+# Forward, strafe, rotate sequence
+ros2 launch odometry_pkg imu_simulator.launch.xml \
+  path_times:="[0.0, 2.0, 4.0, 6.0, 8.0]" \
+  path_velocities_x:="[0.3, 0.0, -0.3, 0.0, 0.0]" \
+  path_velocities_y:="[0.0, 0.3, 0.0, -0.3, 0.0]" \
+  path_rotations:="[0.0, 0.0, 0.0, 0.0, 0.5]"
+```
+
+### Editing Default Path in Launch File
+
+Alternatively, edit the defaults directly in `imu_simulator.launch.xml`:
+
+```xml
+<!-- Custom path parameters (overrides simple mode if provided) -->
+<arg name="path_times" default="[0.0, 3.0, 6.0, 9.0, 12.0]" />
+<arg name="path_velocities_x" default="[0.3, 0.0, -0.3, 0.0, 0.0]" />
+<arg name="path_velocities_y" default="[0.0, 0.3, 0.0, -0.3, 0.0]" />
+<arg name="path_rotations" default="[0.0, 0.0, 0.0, 0.0, 0.0]" />
+```
+
+Then simply run:
+
+```bash
+ros2 launch odometry_pkg imu_simulator.launch.xml
+```
 
 ### Predefined Patterns
 
