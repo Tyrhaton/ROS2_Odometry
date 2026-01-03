@@ -182,6 +182,12 @@ class WheelEncoderSimulator(Node):
         # Timer
         self.dt = 1.0 / rate_hz
         self.timer = self.create_timer(self.dt, self.publish_velocities)
+        self.startup_joint_state_skip = int(0.5 / self.dt)
+        self.startup_joint_state_ticks = 50
+        self.startup_joint_timer = self.create_timer(
+            self.dt,
+            self.publish_startup_joint_state
+        )
 
         # Simulation time
         self.sim_time = 0.0
@@ -664,6 +670,17 @@ class WheelEncoderSimulator(Node):
         ]
         js.velocity = wheel_vels
         self.joint_state_pub.publish(js)
+
+    def publish_startup_joint_state(self):
+        """Publish zero joint states briefly so wheel links appear immediately."""
+        if self.startup_joint_state_skip > 0:
+            self.startup_joint_state_skip -= 1
+            return
+        if self.startup_joint_state_ticks <= 0:
+            self.startup_joint_timer.cancel()
+            return
+        self.startup_joint_state_ticks -= 1
+        self.publish_joint_state([0.0, 0.0, 0.0, 0.0])
 
     def publish_time_marker(self):
         """Publish a text marker with elapsed simulation time for RViz."""

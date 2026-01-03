@@ -13,15 +13,23 @@
        description="Motion mode: forward, rotation, diagonal, circle, polynomial, accel_profile" />
   <arg name="accel_profile_path" default="$(find-pkg-share odometry_pkg)/config/accel_profile.yaml"
        description="YAML path for accel_profile mode" />
+  <arg name="use_mesh_wheels" default="false"
+       description="Use mesh wheels in URDF (slower to load); false uses cylinders" />
+  <arg name="use_joint_state_publisher" default="false"
+       description="Publish static joint states before simulator starts" />
   <arg name="use_rviz" default="true"
        description="Launch RVIZ2 for visualization" />
 
   <let name="pkg_share" value="$(find-pkg-share odometry_pkg)" />
   <let name="rviz_config" value="$(var pkg_share)/rviz/odometry_visualization.rviz" />
-  <let name="urdf_path" value="$(var pkg_share)/urdf/mecanum_robot.urdf" />
+  <let name="urdf_mesh" value="$(var pkg_share)/urdf/mecanum_robot.urdf" />
+  <let name="urdf_simple" value="$(var pkg_share)/urdf/mecanum_robot_simple.urdf" />
+  <let name="urdf_path" value="$(var urdf_simple)" unless="$(var use_mesh_wheels)" />
+  <let name="urdf_path" value="$(var urdf_mesh)" if="$(var use_mesh_wheels)" />
 
-  <!-- Joint State Publisher (zeroed joints so wheel TFs exist) -->
-  <node pkg="joint_state_publisher" exec="joint_state_publisher" name="joint_state_publisher" output="screen">
+  <!-- Joint State Publisher (optional; simulator publishes joint_states) -->
+  <node pkg="joint_state_publisher" exec="joint_state_publisher" name="joint_state_publisher"
+        output="screen" if="$(var use_joint_state_publisher)">
     <!-- Wrap URDF in quotes so YAML parser treats it as a single string -->
     <param name="robot_description" value="'$(command 'cat $(var urdf_path)')'" />
     <param name="use_gui" value="false" />
