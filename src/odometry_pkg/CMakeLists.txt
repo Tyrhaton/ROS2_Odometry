@@ -77,6 +77,7 @@ install(PROGRAMS
   scripts/wheel_encoder_simulator.py
   scripts/position_visualizer.py
   scripts/imu_simulator.py
+  scripts/yaml_path_simulator.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

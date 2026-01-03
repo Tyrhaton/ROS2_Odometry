@@ -147,3 +147,139 @@ The simulator automatically recalculates acceleration intervals when path parame
 5. **Database logging**: All IMU and position data is automatically logged to SQLite
 
 For more examples, see `config/imu_path_examples.yaml`.
+
+---
+
+## YAML Path Simulator
+
+The YAML Path Simulator allows you to define custom motion paths in YAML files with support for three interpolation types:
+
+- **Constant**: Fixed value over an interval
+- **Linear**: `a(t) = m * t_rel + b` (linear ramp)
+- **Parabolic**: `a(t) = a * t_rel² + b * t_rel + c` (quadratic curve)
+
+where `t_rel = t - t_start` is the time relative to the segment start.
+
+### Quick Start
+
+```bash
+# Build and source
+colcon build --packages-select odometry_pkg
+source install/setup.zsh
+
+# Run with constant acceleration (IMU mode)
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_constant_accel.yaml \
+  sensor_type:=imu
+
+# Run with linear acceleration
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_linear_accel.yaml \
+  sensor_type:=imu
+
+# Run with parabolic acceleration
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_parabolic_accel.yaml \
+  sensor_type:=imu
+
+# Run with mecanum wheel velocities
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/mecanum_velocity_path.yaml \
+  sensor_type:=mecanum
+```
+
+### YAML Path File Format
+
+#### IMU (Acceleration-based)
+
+```yaml
+path:
+  name: "my_imu_path"
+  duration: 30.0
+  sample_rate_hz: 10  # 100ms intervals
+
+  segments:
+    # Constant acceleration
+    - interval: [0.0, 5.0]
+      type: constant
+      accel_x: 0.0
+      accel_y: 0.0
+      accel_z: 0.0
+
+    # Linear acceleration: a(t) = m * t_rel + b
+    - interval: [5.0, 10.0]
+      type: linear
+      accel_x:
+        m: 0.05   # slope
+        b: 0.0    # initial value at segment start
+      accel_y: 0.0
+      accel_z: 0.0
+
+    # Parabolic acceleration: a(t) = a * t_rel² + b * t_rel + c
+    - interval: [10.0, 15.0]
+      type: parabolic
+      accel_x:
+        a: -0.025  # quadratic coefficient
+        b: 0.1     # linear coefficient
+        c: 0.0     # constant offset
+      accel_y: 0.0
+      accel_z: 0.0
+```
+
+#### Mecanum Wheels (Velocity-based)
+
+```yaml
+path:
+  name: "my_mecanum_path"
+  duration: 30.0
+  sample_rate_hz: 50
+
+  segments:
+    # Constant velocity
+    - interval: [0.0, 5.0]
+      type: constant
+      velocity_x: 0.3  # forward (m/s)
+      velocity_y: 0.0  # lateral (m/s)
+      omega: 0.0       # rotation (rad/s)
+
+    # Linear velocity ramp
+    - interval: [5.0, 10.0]
+      type: linear
+      velocity_x:
+        m: 0.1
+        b: 0.3
+      velocity_y: 0.0
+      omega: 0.0
+```
+
+### Available Path Files
+
+| File | Description | Sensor Type |
+|------|-------------|-------------|
+| `imu_constant_accel.yaml` | Constant acceleration (Assignment File 1) | IMU |
+| `imu_linear_accel.yaml` | Linear acceleration (Assignment File 2) | IMU |
+| `imu_parabolic_accel.yaml` | Parabolic acceleration (Assignment File 3) | IMU |
+| `mecanum_velocity_path.yaml` | Example mecanum velocity profile | Mecanum |
+
+### Launch File Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `path_file` | `config/paths/imu_constant_accel.yaml` | Path to YAML file |
+| `sensor_type` | `imu` | `imu` or `mecanum` |
+| `use_rviz` | `true` | Launch RViz visualization |
+| `loop` | `false` | Loop the path continuously |
+| `initial_x` | `0.0` | Starting X position (m) |
+| `initial_y` | `0.0` | Starting Y position (m) |
+
+### Creating Custom Paths
+
+1. Create a new YAML file in `config/paths/`
+2. Define segments with intervals and interpolation types
+3. Launch with your custom path file:
+
+```bash
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/my_custom_path.yaml \
+  sensor_type:=imu
+```

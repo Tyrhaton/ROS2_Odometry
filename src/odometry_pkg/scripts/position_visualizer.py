@@ -14,7 +14,7 @@ from rclpy.qos import QoSProfile, DurabilityPolicy
 from odometry_interfaces_pkg.msg import PositionData
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped, Point, TransformStamped
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import ColorRGBA
 from tf2_ros import TransformBroadcaster
 import math
@@ -27,8 +27,10 @@ class PositionVisualizer(Node):
         # Declare parameters for mesh
         self.declare_parameter('use_mesh', True)
         self.declare_parameter('mesh_scale', 0.001)  # STL is in mm, convert to meters
+        self.declare_parameter('label_interval', 2.0)  # Seconds between position labels
         self.use_mesh = self.get_parameter('use_mesh').value
         self.mesh_scale = self.get_parameter('mesh_scale').value
+        self.label_interval = self.get_parameter('label_interval').value
 
         # Geometry matching the URDF (box chassis + four wheel meshes)
         self.base_size = (0.40, 0.20, 0.10)
@@ -72,6 +74,7 @@ class PositionVisualizer(Node):
         self.path_pub = self.create_publisher(Path, '/odometry/path', 10)
         self.pose_pub = self.create_publisher(PoseStamped, '/odometry/pose', 10)
         self.marker_pub = self.create_publisher(Marker, '/odometry/robot_marker', 10)
+        self.label_pub = self.create_publisher(MarkerArray, '/odometry/position_labels', 10)
         
         # TF broadcaster for robot pose
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -93,15 +96,29 @@ class PositionVisualizer(Node):
         self.last_x = None
         self.last_y = None
         
+        # Position labels tracking
+        self.position_labels = []  # List of (x, y, label_id)
+        self.next_label_id = 0
+        self.last_label_time = None
+        self.start_time = None
+        
         self.get_logger().info('Position Visualizer started')
         self.get_logger().info(f'Using mesh: {self.use_mesh}, scale: {self.mesh_scale}')
         self.get_logger().info('Subscribing to: /odometry/position_from_accel (remapped)')
         self.get_logger().info('Publishing: /odometry/path, /odometry/pose, /odometry/robot_marker')
+        self.get_logger().info(f'Position labels every {self.label_interval} seconds')
         # Publish once immediately so all wheels appear without waiting for the first timer tick
         self.publish_last_tf()
     
     def position_callback(self, msg: PositionData):
         current_time = self.get_clock().now().to_msg()
+        
+        # Initialize start time
+        if self.start_time is None:
+            self.start_time = self.get_clock().now()
+            self.last_label_time = self.start_time
+            # Add initial position label at (0, 0)
+            self.add_position_label(msg.x, msg.y, current_time)
         
         # Detect position reset (large jump back to origin)
         if self.last_x is not None and self.last_y is not None:
@@ -109,8 +126,14 @@ class PositionVisualizer(Node):
             dy = abs(msg.y - self.last_y)
             # If position jumped more than 0.5m and is near origin, clear path
             if (dx > 0.5 or dy > 0.5) and abs(msg.x) < 0.1 and abs(msg.y) < 0.1:
-                self.get_logger().info('Position reset detected - clearing path')
+                self.get_logger().info('Position reset detected - clearing path and labels')
                 self.path_msg.poses.clear()
+                self.position_labels.clear()
+                self.next_label_id = 0
+                self.start_time = self.get_clock().now()
+                self.last_label_time = self.start_time
+                # Add new starting label
+                self.add_position_label(msg.x, msg.y, current_time)
         
         self.last_x = msg.x
         self.last_y = msg.y
@@ -153,6 +176,16 @@ class PositionVisualizer(Node):
         
         # Create robot marker (URDF-matching multi-part mesh or arrow)
         self.publish_robot_marker(msg, current_time)
+        
+        # Check if we should add a position label
+        now = self.get_clock().now()
+        elapsed = (now - self.last_label_time).nanoseconds / 1e9
+        if elapsed >= self.label_interval:
+            self.add_position_label(msg.x, msg.y, current_time)
+            self.last_label_time = now
+        
+        # Publish all position labels
+        self.publish_position_labels(current_time)
 
     def publish_last_tf(self):
         """Publish the most recent transform (or a zeroed one on startup)."""
@@ -298,6 +331,64 @@ class PositionVisualizer(Node):
         z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
         w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
         return x, y, z, w
+
+    def add_position_label(self, x: float, y: float, stamp):
+        """Add a position label at the given coordinates."""
+        label_id = self.next_label_id
+        self.position_labels.append((x, y, label_id))
+        self.next_label_id += 1
+        self.get_logger().info(f'Added position label #{label_id}: ({x:.2f}, {y:.2f})')
+
+    def publish_position_labels(self, stamp):
+        """Publish all position labels as markers."""
+        marker_array = MarkerArray()
+        
+        for x, y, label_id in self.position_labels:
+            # Sphere marker at the position
+            sphere = Marker()
+            sphere.header.stamp = stamp
+            sphere.header.frame_id = 'map'
+            sphere.ns = 'position_spheres'
+            sphere.id = label_id
+            sphere.type = Marker.SPHERE
+            sphere.action = Marker.ADD
+            sphere.pose.position.x = x
+            sphere.pose.position.y = y
+            sphere.pose.position.z = 0.05  # Slightly above ground
+            sphere.pose.orientation.w = 1.0
+            sphere.scale.x = 0.1
+            sphere.scale.y = 0.1
+            sphere.scale.z = 0.1
+            # Green color
+            sphere.color.r = 0.0
+            sphere.color.g = 1.0
+            sphere.color.b = 0.0
+            sphere.color.a = 0.9
+            marker_array.markers.append(sphere)
+            
+            # Text marker with waypoint number above the sphere
+            text = Marker()
+            text.header.stamp = stamp
+            text.header.frame_id = 'map'
+            text.ns = 'position_labels'
+            text.id = label_id
+            text.type = Marker.TEXT_VIEW_FACING
+            text.action = Marker.ADD
+            text.pose.position.x = x
+            text.pose.position.y = y
+            text.pose.position.z = 0.25  # Above the sphere
+            text.pose.orientation.w = 1.0
+            text.scale.z = 0.2  # Text height (bigger)
+            text.color.r = 1.0
+            text.color.g = 1.0
+            text.color.b = 1.0
+            text.color.a = 1.0
+            # Show waypoint number instead of coordinates
+            text.text = f"{label_id}"
+            marker_array.markers.append(text)
+        
+        self.label_pub.publish(marker_array)
+
 
 
 def main(args=None):
