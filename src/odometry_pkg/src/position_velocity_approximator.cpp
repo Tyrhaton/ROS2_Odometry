@@ -296,7 +296,7 @@ private:
                 static_count_ = 0;
             }
 
-            // ===== TRAPEZOIDAL INTEGRATION FOR VELOCITY =====
+            // TRAPEZOIDAL INTEGRATION FOR VELOCITY
             // v(t+dt) = v(t) + (a(t) + a(t+dt)) * dt / 2
             // This is more accurate than Euler: v += a * dt
             if (have_prev_accel_) {
@@ -310,13 +310,13 @@ private:
             angular_velocity_z_ = angular_vel_z;  // Angular velocity from sensor
         }
 
-        // ===== TRAPEZOIDAL INTEGRATION FOR POSITION =====
+        // TRAPEZOIDAL INTEGRATION FOR POSITION
         // p(t+dt) = p(t) + (v(t) + v(t+dt)) * dt / 2
         // This is more accurate than Euler: p += v * dt
         position_x_ += (old_velocity_x + velocity_x_) * dt * 0.5;
         position_y_ += (old_velocity_y + velocity_y_) * dt * 0.5;
 
-        // ===== TRAPEZOIDAL INTEGRATION FOR ORIENTATION =====
+        // TRAPEZOIDAL INTEGRATION FOR ORIENTATION
         // alpha(t+dt) = alpha(t) + (omega(t) + omega(t+dt)) * dt / 2
         if (have_prev_accel_) {
             alpha_ += (prev_angular_vel_z_ + angular_velocity_z_) * dt * 0.5;

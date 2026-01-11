@@ -21,9 +21,9 @@ bool approx_equal(double a, double b, double epsilon = EPSILON) {
     return std::abs(a - b) < epsilon;
 }
 
-// ============================================================================
+//
 // TEST SUITE: Euler Integration (Assignment Formula)
-// ============================================================================
+//
 
 TEST(IntegrationTest, EulerIntegration_ConstantAcceleration) {
     // Test: v(t) = v0 + a*t for constant acceleration
@@ -77,9 +77,9 @@ TEST(IntegrationTest, EulerIntegration_AccelerationToPosition) {
     EXPECT_LT(position, 7.0);  // But not unreasonably high
 }
 
-// ============================================================================
+//
 // TEST SUITE: Frame Transformation (Robot -> Map)
-// ============================================================================
+//
 
 TEST(IntegrationTest, FrameTransformation_NoRotation) {
     // Robot moving forward with no rotation (alpha = 0)
@@ -150,9 +150,9 @@ TEST(IntegrationTest, FrameTransformation_WithSidewaysMotion) {
     EXPECT_DOUBLE_EQ(vy_map, 1.0);
 }
 
-// ============================================================================
+//
 // TEST SUITE: Rotational Motion (Angular Velocity Integration)
-// ============================================================================
+//
 
 TEST(IntegrationTest, RotationalMotion_ConstantAngularVelocity) {
     // Test: alpha(t) = alpha0 + omega*t
@@ -188,9 +188,9 @@ TEST(IntegrationTest, RotationalMotion_FullCircle) {
     EXPECT_LT(alpha, 6.4);  // < 2*pi + small margin
 }
 
-// ============================================================================
+//
 // TEST SUITE: Circular Motion (Assignment Scenario)
-// ============================================================================
+//
 
 TEST(IntegrationTest, CircularMotion_CouplingVelocityAndRotation) {
     // Simulate circular motion: constant forward velocity + constant angular velocity
@@ -229,9 +229,9 @@ TEST(IntegrationTest, CircularMotion_CouplingVelocityAndRotation) {
     EXPECT_TRUE(approx_equal(position_y, radius, 0.3));
 }
 
-// ============================================================================
+//
 // TEST SUITE: Assignment-Specific Scenarios
-// ============================================================================
+//
 
 TEST(IntegrationTest, Assignment_StraightLineMotion) {
     // Straight line motion with constant acceleration, then constant velocity
@@ -326,9 +326,9 @@ TEST(IntegrationTest, Assignment_TimestepIndependence) {
     EXPECT_LT(std::abs(pos2 - pos1), 1.0);
 }
 
-// ============================================================================
+//
 // Main function
-// ============================================================================
+//
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);

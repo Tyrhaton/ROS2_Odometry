@@ -73,9 +73,9 @@ public:
     }
 };
 
-// ============================================================================
+//
 // TEST SUITE: Constant Polynomial
-// ============================================================================
+//
 
 TEST(PolynomialSimulatorTest, ConstantPolynomial_InsideInterval) {
     PolynomialFunction func;
@@ -108,9 +108,9 @@ TEST(PolynomialSimulatorTest, ConstantPolynomial_OutsideInterval) {
     EXPECT_DOUBLE_EQ(func.get_value(100.0), 0.0);
 }
 
-// ============================================================================
+//
 // TEST SUITE: Linear Polynomial
-// ============================================================================
+//
 
 TEST(PolynomialSimulatorTest, LinearPolynomial_CorrectValues) {
     PolynomialFunction func;
@@ -161,9 +161,9 @@ TEST(PolynomialSimulatorTest, LinearPolynomial_OutsideInterval) {
     EXPECT_DOUBLE_EQ(func.get_value(20.1), 0.0);
 }
 
-// ============================================================================
+//
 // TEST SUITE: Quadratic Polynomial
-// ============================================================================
+//
 
 TEST(PolynomialSimulatorTest, QuadraticPolynomial_CorrectValues) {
     PolynomialFunction func;
@@ -218,9 +218,9 @@ TEST(PolynomialSimulatorTest, QuadraticPolynomial_OutsideInterval) {
     EXPECT_DOUBLE_EQ(func.get_value(15.1), 0.0);
 }
 
-// ============================================================================
+//
 // TEST SUITE: Multiple Intervals (Assignment Requirement)
-// ============================================================================
+//
 
 TEST(PolynomialSimulatorTest, MultipleIntervals_Sequential) {
     PolynomialFunction func;
@@ -296,9 +296,9 @@ TEST(PolynomialSimulatorTest, MultipleIntervals_WithGaps) {
     EXPECT_DOUBLE_EQ(func.get_value(9.9), 0.0);
 }
 
-// ============================================================================
+//
 // TEST SUITE: Assignment-Specific Scenarios
-// ============================================================================
+//
 
 TEST(PolynomialSimulatorTest, Assignment_AccelerationProfile) {
     // Simulate the acceleration profile from the assignment PDF
@@ -347,9 +347,9 @@ TEST(PolynomialSimulatorTest, Assignment_BoundaryConditions) {
     EXPECT_DOUBLE_EQ(func.get_value(20.001), 0.0);
 }
 
-// ============================================================================
+//
 // Main function
-// ============================================================================
+//
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);

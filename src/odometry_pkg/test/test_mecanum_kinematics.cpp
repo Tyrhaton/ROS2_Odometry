@@ -21,9 +21,9 @@ bool approx_equal(double a, double b, double epsilon = EPSILON) {
     return std::abs(a - b) < epsilon;
 }
 
-// ============================================================================
+//
 // TEST SUITE: Mecanum Inverse Kinematics (Assignment Formulas)
-// ============================================================================
+//
 
 TEST(MecanumKinematicsTest, InverseKinematics_ForwardMotion) {
     // All wheels rotating at same speed -> pure forward motion
@@ -147,9 +147,9 @@ TEST(MecanumKinematicsTest, InverseKinematics_CircularMotion) {
     EXPECT_DOUBLE_EQ(omega, 0.0);
 }
 
-// ============================================================================
+//
 // TEST SUITE: Wheel Radius Scaling
-// ============================================================================
+//
 
 TEST(MecanumKinematicsTest, WheelRadius_LinearScaling) {
     // Larger wheels -> higher linear velocity for same angular velocity
@@ -169,9 +169,9 @@ TEST(MecanumKinematicsTest, WheelRadius_LinearScaling) {
     EXPECT_DOUBLE_EQ(vx_large / vx_small, 4.0);
 }
 
-// ============================================================================
+//
 // TEST SUITE: Robot Geometry (lx, ly) Effects
-// ============================================================================
+//
 
 TEST(MecanumKinematicsTest, RobotGeometry_RotationScaling) {
     // Smaller robot -> higher angular velocity for same wheel speeds
@@ -192,9 +192,9 @@ TEST(MecanumKinematicsTest, RobotGeometry_RotationScaling) {
     EXPECT_GT(omega_small, omega_large);
 }
 
-// ============================================================================
+//
 // TEST SUITE: Position Integration from Velocities
-// ============================================================================
+//
 
 TEST(MecanumKinematicsTest, PositionIntegration_StraightLine) {
     // Robot moving straight forward
@@ -288,9 +288,9 @@ TEST(MecanumKinematicsTest, PositionIntegration_RotationInPlace) {
     EXPECT_TRUE(approx_equal(alpha, M_PI / 2.0, 0.01));
 }
 
-// ============================================================================
+//
 // TEST SUITE: Assignment-Specific Scenarios
-// ============================================================================
+//
 
 TEST(MecanumKinematicsTest, Assignment_CircularPath) {
     // Simulate diagonal motion from the assignment simulator pattern
@@ -398,9 +398,9 @@ TEST(MecanumKinematicsTest, Assignment_DefaultParameters) {
     EXPECT_LT(ly, 2.0);
 }
 
-// ============================================================================
+//
 // Main function
-// ============================================================================
+//
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);

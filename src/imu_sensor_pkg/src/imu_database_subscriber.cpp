@@ -26,7 +26,7 @@ public:
         }
         
         // Create table
-        const char* sql = 
+        const char* sql =
             "CREATE TABLE IF NOT EXISTS imu_data ("
             "id INTEGER PRIMARY KEY AUTOINCREMENT,"
             "timestamp_sec INTEGER,"
@@ -99,7 +99,7 @@ private:
     {
         if (!db_ || !last_imu_data_ || !last_temperature_data_) return;
 
-        const char* sql = 
+        const char* sql =
             "INSERT INTO imu_data (timestamp_sec, timestamp_nanosec, accel_x, accel_y, accel_z, "
             "gyro_x, gyro_y, gyro_z, temperature) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";

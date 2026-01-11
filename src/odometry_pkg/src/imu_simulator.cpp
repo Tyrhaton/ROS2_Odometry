@@ -154,13 +154,13 @@ class IMUSimulator : public rclcpp::Node
 public:
     IMUSimulator() : Node("imu_simulator")
     {
-        // ========== PARAMETER SETUP ==========
+        // PARAMETER SETUP
         declare_and_get_parameters();
         
-        // ========== LOAD PATH FROM YAML ==========
+        // LOAD PATH FROM YAML
         load_path_from_yaml();
         
-        // ========== CREATE PUBLISHERS ==========
+        // CREATE PUBLISHERS
         imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>(
             "/imu/data", 10);
         accel_pub_ = this->create_publisher<geometry_msgs::msg::AccelStamped>(
@@ -168,7 +168,7 @@ public:
         reset_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             "/position/corrected", 10);
         
-        // ========== CREATE TIMERS ==========
+        // CREATE TIMERS
         // Main timer for publishing IMU data
         double timer_period_ms = 1000.0 / rate_hz_;
         timer_ = this->create_wall_timer(
@@ -180,21 +180,18 @@ public:
             500ms,
             std::bind(&IMUSimulator::send_initial_position_reset, this));
         
-        // ========== STARTUP INFO ==========
-        RCLCPP_INFO(this->get_logger(), "╔════════════════════════════════════════╗");
-        RCLCPP_INFO(this->get_logger(), "║      IMU SIMULATOR STARTED             ║");
-        RCLCPP_INFO(this->get_logger(), "╠════════════════════════════════════════╣");
-        RCLCPP_INFO(this->get_logger(), "║ Path file:  %-26s ║", path_file_.c_str());
-        RCLCPP_INFO(this->get_logger(), "║ Duration:   %-26.1f ║", total_duration_);
-        RCLCPP_INFO(this->get_logger(), "║ Rate:       %-26d ║", rate_hz_);
-        RCLCPP_INFO(this->get_logger(), "║ Segments:   %-26zu ║", segments_.size());
-        RCLCPP_INFO(this->get_logger(), "╚════════════════════════════════════════╝");
+        // STARTUP INFO
+        RCLCPP_INFO(this->get_logger(), "- IMU SIMULATOR STARTED");
+        RCLCPP_INFO(this->get_logger(), "- Path file:  %-26s -", path_file_.c_str());
+        RCLCPP_INFO(this->get_logger(), "- Duration:   %-26.1f -", total_duration_);
+        RCLCPP_INFO(this->get_logger(), "- Rate:       %-26d -", rate_hz_);
+        RCLCPP_INFO(this->get_logger(), "- Segments:   %-26zu -", segments_.size());
     }
 
 private:
-    // ========================================================================
+    //
     // PARAMETER MANAGEMENT
-    // ========================================================================
+    //
     
     void declare_and_get_parameters()
     {
@@ -236,9 +233,9 @@ private:
         }
     }
     
-    // ========================================================================
+    //
     // YAML LOADING AND PARSING
-    // ========================================================================
+    //
     
     void load_path_from_yaml()
     {
@@ -318,7 +315,7 @@ private:
     {
         TimeSegment seg;
         
-        // ===== Parse time interval =====
+        // Parse time interval
         if (!seg_node["interval"]) {
             throw std::runtime_error("Segment must have 'interval' key");
         }
@@ -328,13 +325,13 @@ private:
         
         double segment_duration = seg.end_time - seg.start_time;
         
-        // ===== Parse X-axis acceleration =====
+        // Parse X-axis acceleration
         seg.accel_x = parse_acceleration_profile(seg_node, "accel_x", segment_duration);
         
-        // ===== Parse Y-axis acceleration =====
+        // Parse Y-axis acceleration
         seg.accel_y = parse_acceleration_profile(seg_node, "accel_y", segment_duration);
         
-        // ===== Parse Z-axis acceleration (default to zero) =====
+        // Parse Z-axis acceleration (default to zero)
         seg.accel_z = parse_acceleration_profile(seg_node, "accel_z", segment_duration);
         
         return seg;
@@ -371,7 +368,7 @@ private:
         
         auto accel_node = seg_node[key];
         
-        // ===== CASE 1: Simple scalar value (constant acceleration) =====
+        // CASE 1: Simple scalar value (constant acceleration)
         if (accel_node.IsScalar()) {
             double value = accel_node.as<double>();
             // Create two points with same value for constant interpolation
@@ -380,7 +377,7 @@ private:
             return profile;
         }
         
-        // ===== CASE 2: Sequence of [time, acceleration] pairs =====
+        // CASE 2: Sequence of [time, acceleration] pairs
         if (accel_node.IsSequence()) {
             for (const auto& point_node : accel_node) {
                 if (point_node.IsSequence() && point_node.size() >= 2) {
@@ -407,7 +404,7 @@ private:
             return profile;
         }
         
-        // ===== CASE 3: Legacy format support (map with coefficients) =====
+        // CASE 3: Legacy format support (map with coefficients)
         // This maintains backward compatibility with old YAML files
         if (accel_node.IsMap()) {
             // Try to parse as linear: a(t) = m*t + b
@@ -475,9 +472,9 @@ private:
         return profile;
     }
     
-    // ========================================================================
+    //
     // SIMULATION LOGIC
-    // ========================================================================
+    //
     
     /**
      * @brief Find which segment contains the given simulation time
@@ -523,9 +520,9 @@ private:
         az = segment->accel_z.evaluate(t_rel);
     }
     
-    // ========================================================================
+    //
     // TIMER CALLBACKS
-    // ========================================================================
+    //
     
     /**
      * @brief Main timer callback - called at publish_rate_hz
@@ -599,9 +596,9 @@ private:
             initial_x_, initial_y_, initial_alpha_ * 180.0 / M_PI);
     }
     
-    // ========================================================================
+    //
     // MESSAGE PUBLISHING
-    // ========================================================================
+    //
     
     /**
      * @brief Publish IMU sensor data
@@ -635,13 +632,13 @@ private:
         accel_pub_->publish(accel_msg);
     }
     
-    // ========================================================================
+    //
     // UTILITY FUNCTIONS
-    // ========================================================================
+    //
     
-    // ========================================================================
+    //
     // MEMBER VARIABLES
-    // ========================================================================
+    //
     
     // Configuration
     std::string path_file_;
@@ -670,9 +667,9 @@ private:
     rclcpp::TimerBase::SharedPtr initial_reset_timer_;
 };
 
-// ============================================================================
+//
 // MAIN
-// ============================================================================
+//
 
 int main(int argc, char** argv)
 {

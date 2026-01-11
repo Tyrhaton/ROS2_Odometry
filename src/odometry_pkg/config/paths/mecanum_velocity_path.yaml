@@ -2,8 +2,12 @@
 # Example velocity-based path configuration for mecanum wheels
 # Duration: 30 seconds
 #
-# For mecanum wheels, we specify velocity values (not acceleration)
-# The wheel encoder simulator outputs these velocities directly
+# Supports three YAML formats:
+# 1. Scalar: velocity_x: 0.3 (constant velocity)
+# 2. Interpolation points: velocity_x: [[0, 0], [1, 0.3], [2, 0.3]]
+# 3. Legacy coefficients:
+#    - linear: velocity_x: {m: 0.1, b: 0.0} -> v(t) = m*t + b
+#    - quadratic: velocity_x: {a: -0.01, b: -0.02, c: 0.3} -> v(t) = a*t² + b*t + c
 
 path:
   name: "mecanum_velocity_example"
@@ -11,61 +15,50 @@ path:
   duration: 30.0
   sample_rate_hz: 50  # 50 Hz for wheel encoders
 
-  # For mecanum wheels: specify velocity values (X, Y, omega)
-  # velocity_x: forward/backward (m/s)
-  # velocity_y: left/right strafe (m/s)
-  # omega: rotation (rad/s)
   segments:
     # Phase 1: Stand still
     - interval: [0.0, 2.0]
-      type: constant
       velocity_x: 0.0
       velocity_y: 0.0
       omega: 0.0
 
-    # Phase 2: Accelerate forward linearly
+    # Phase 2: Accelerate forward (linear ramp)
     - interval: [2.0, 5.0]
-      type: linear
       velocity_x:
-        m: 0.1  # m/s² acceleration
-        b: 0.0  # start from 0
+        m: 0.1   # acceleration: 0.1 m/s per second
+        b: 0.0   # start from 0 m/s
       velocity_y: 0.0
       omega: 0.0
 
     # Phase 3: Cruise at constant velocity
     - interval: [5.0, 10.0]
-      type: constant
       velocity_x: 0.3
       velocity_y: 0.0
       omega: 0.0
 
     # Phase 4: Strafe right while moving forward
     - interval: [10.0, 15.0]
-      type: constant
       velocity_x: 0.2
       velocity_y: 0.2
       omega: 0.0
 
     # Phase 5: Rotate while moving (circular motion)
     - interval: [15.0, 20.0]
-      type: constant
       velocity_x: 0.3
       velocity_y: 0.0
-      omega: 0.0
+      omega: 0.4
 
-    # Phase 6: Decelerate with parabolic profile
+    # Phase 6: Decelerate with quadratic profile
     - interval: [20.0, 25.0]
-      type: parabolic
       velocity_x:
-        a: -0.01      # deceleration curve
-        b: -0.02
+        a: -0.01      # quadratic coefficient
+        b: -0.02      # linear coefficient
         c: 0.3        # starting velocity
       velocity_y: 0.0
       omega: 0.0
 
     # Phase 7: Stop
     - interval: [25.0, 30.0]
-      type: constant
       velocity_x: 0.0
       velocity_y: 0.0
       omega: 0.0

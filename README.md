@@ -12,7 +12,7 @@ Use the Python or XML launch variants to start either the mecanum wheel simulati
 
 ---
 
-## 🚀 Quick Reference - Copy & Paste Commands
+## Quick Reference - Copy & Paste Commands
 
 ### Build & Source (run once)
 ```bash
@@ -21,63 +21,63 @@ colcon build --packages-select odometry_pkg
 source install/setup.zsh   # or setup.bash
 ```
 
-### IMU Simulator (Acceleratie-gebaseerd)
+### IMU Simulator (Acceleration-based)
 
 ```bash
-# Constant acceleratie - smooth (10ms, 6 decimalen)
+# Constant acceleration - smooth (10ms, 6 decimals)
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_constant_accel.yaml \
-  interval:=10 decimalen:=6
+  interval:=10 decimals:=6
 
-# Constant acceleratie - trappetjes (100ms, 2 decimalen)
+# Constant acceleration - stair-stepping (100ms, 2 decimals)
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_constant_accel.yaml \
-  interval:=100 decimalen:=2
+  interval:=100 decimals:=2
 
-# Linear acceleratie - smooth
+# Linear acceleration - smooth
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_linear_accel.yaml \
-  interval:=10 decimalen:=6
+  interval:=10 decimals:=6
 
-# Linear acceleratie - trappetjes
+# Linear acceleration - stair-stepping
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_linear_accel.yaml \
-  interval:=100 decimalen:=2
+  interval:=100 decimals:=2
 
-# Parabolic acceleratie - smooth
+# Quadratic acceleration - smooth
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
-  path_file:=config/paths/imu_parabolic_accel.yaml \
-  interval:=10 decimalen:=6
+  path_file:=config/paths/imu_quadratic_accel.yaml \
+  interval:=10 decimals:=6
 
-# Parabolic acceleratie - trappetjes
+# Quadratic acceleration - stair-stepping
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
-  path_file:=config/paths/imu_parabolic_accel.yaml \
-  interval:=100 decimalen:=2
+  path_file:=config/paths/imu_quadratic_accel.yaml \
+  interval:=100 decimals:=2
 ```
 
-### Mecanum Simulator (Snelheid-gebaseerd)
+### Mecanum Simulator (Velocity-based)
 
 ```bash
-# Mecanum velocity - smooth (10ms, 6 decimalen)
+# Mecanum velocity - smooth (10ms, 6 decimals)
 ros2 launch odometry_pkg yaml_path_mecanum.launch.xml \
   path_file:=config/paths/mecanum_velocity_path.yaml \
-  interval:=10 decimalen:=6
+  interval:=10 decimals:=6
 
-# Mecanum velocity - trappetjes (100ms, 2 decimalen)
+# Mecanum velocity - stair-stepping (100ms, 2 decimals)
 ros2 launch odometry_pkg yaml_path_mecanum.launch.xml \
   path_file:=config/paths/mecanum_velocity_path.yaml \
-  interval:=100 decimalen:=2
+  interval:=100 decimals:=2
 ```
 
-### Parameter Uitleg
+### Parameter Explanation
 
-| Parameter | Waarden | Effect |
+| Parameter | Values | Effect |
 |-----------|---------|--------|
 | `interval` | `10` | 10ms = 100Hz (smooth) |
-| `interval` | `100` | 100ms = 10Hz (trappetjes zichtbaar) |
-| `interval` | `500` | 500ms = 2Hz (grove stappen) |
-| `decimalen` | `6` | Volledige precisie (smooth lijn) |
-| `decimalen` | `2` | Afgerond op 0.01 (trappetjes) |
+| `interval` | `100` | 100ms = 10Hz (stair-stepping visible) |
+| `interval` | `500` | 500ms = 2Hz (coarse steps) |
+| `decimals` | `6` | Full precision (smooth line) |
+| `decimals` | `2` | Rounded to 0.01 (stair-stepping) |
 
 ---
 
@@ -227,7 +227,7 @@ The YAML Path Simulator allows you to define custom motion paths in YAML files w
 
 - **Constant**: Fixed value over an interval
 - **Linear**: `a(t) = m * t_rel + b` (linear ramp)
-- **Parabolic**: `a(t) = a * t_rel² + b * t_rel + c` (quadratic curve)
+- **Quadratic**: `a(t) = a * t_rel² + b * t_rel + c` (quadratic curve)
 
 where `t_rel = t - t_start` is the time relative to the segment start.
 
@@ -237,7 +237,7 @@ The simulator uses **piecewise linear Lagrange interpolation** to calculate acce
 
 - **Smooth transitions** at any sample rate
 - **Mathematically accurate** interpolation using the Lagrange polynomial formula
-- **Configurable precision** via the `decimalen` parameter
+- **Configurable precision** via the `decimals` parameter
 
 The Lagrange formula used for linear interpolation between two points:
 
@@ -257,16 +257,16 @@ ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
 # Run with linear acceleration - smooth (10ms interval, 6 decimals)
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_linear_accel.yaml \
-  interval:=10 decimalen:=6
+  interval:=10 decimals:=6
 
-# Run with linear acceleration - "trappetjes" effect (100ms interval, 2 decimals)
+# Run with linear acceleration - "stair-stepping" effect (100ms interval, 2 decimals)
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_linear_accel.yaml \
-  interval:=100 decimalen:=2
+  interval:=100 decimals:=2
 
-# Run with parabolic acceleration
+# Run with quadratic acceleration
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
-  path_file:=config/paths/imu_parabolic_accel.yaml
+  path_file:=config/paths/imu_quadratic_accel.yaml
 
 # Run with mecanum wheel velocities
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
@@ -281,7 +281,7 @@ The simulator provides two key parameters to control output resolution:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `interval` | `-1` | Sample interval in milliseconds. Overrides YAML `sample_rate_hz`. Examples: `10` (100Hz), `100` (10Hz), `500` (2Hz) |
-| `decimalen` | `6` | Decimal precision for acceleration values. Use `2` for visible "trappetjes" (stair-stepping), `6` for smooth lines |
+| `decimals` | `6` | Decimal precision for acceleration values. Use `2` for visible "stair-stepping" (stair-stepping), `6` for smooth lines |
 
 **Examples:**
 
@@ -289,24 +289,24 @@ The simulator provides two key parameters to control output resolution:
 # Smooth line (high precision, high sample rate)
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_linear_accel.yaml \
-  interval:=10 decimalen:=6
+  interval:=10 decimals:=6
 
 # Visible stair-steps (low precision, low sample rate)  
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_linear_accel.yaml \
-  interval:=100 decimalen:=2
+  interval:=100 decimals:=2
 
 # Very coarse sampling (500ms = 2Hz)
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_linear_accel.yaml \
-  interval:=500 decimalen:=2
+  interval:=500 decimals:=2
 ```
 
-**How `decimalen` affects output:**
+**How `decimals` affects output:**
 
-| decimalen | Rounding | Effect |
+| decimals | Rounding | Effect |
 |-----------|----------|--------|
-| `2` | 0.01 | Values repeat → visible "trappetjes" |
+| `2` | 0.01 | Values repeat → visible "stair-stepping" |
 | `3` | 0.001 | Slight stepping |
 | `6` | 0.000001 | Smooth line (default) |
 
@@ -337,9 +337,9 @@ path:
       accel_y: 0.0
       accel_z: 0.0
 
-    # Parabolic acceleration: a(t) = a * t_rel² + b * t_rel + c
+    # Quadratic acceleration: a(t) = a * t_rel² + b * t_rel + c
     - interval: [10.0, 15.0]
-      type: parabolic
+      type: quadratic
       accel_x:
         a: -0.025  # quadratic coefficient
         b: 0.1     # linear coefficient
@@ -380,7 +380,7 @@ path:
 |------|-------------|-------------|
 | `imu_constant_accel.yaml` | Constant acceleration (Assignment File 1) | IMU |
 | `imu_linear_accel.yaml` | Linear acceleration (Assignment File 2) | IMU |
-| `imu_parabolic_accel.yaml` | Parabolic acceleration (Assignment File 3) | IMU |
+| `imu_quadratic_accel.yaml` | Quadratic acceleration (Assignment File 3) | IMU |
 | `mecanum_velocity_path.yaml` | Example mecanum velocity profile | Mecanum |
 
 ### Launch File Parameters
@@ -390,7 +390,7 @@ path:
 | `path_file` | `config/paths/imu_constant_accel.yaml` | Path to YAML file |
 | `sensor_type` | `imu` | `imu` or `mecanum` |
 | `interval` | `-1` | Sample interval in ms (-1 = use YAML sample_rate_hz) |
-| `decimalen` | `6` | Decimal precision (2 = trappetjes, 6 = smooth) |
+| `decimals` | `6` | Decimal precision (2 = stair-stepping, 6 = smooth) |
 | `use_rviz` | `true` | Launch RViz visualization |
 | `loop` | `false` | Loop the path continuously |
 | `initial_x` | `0.0` | Starting X position (m) |
