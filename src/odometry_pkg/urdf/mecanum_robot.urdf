@@ -79,7 +79,7 @@
     </collision>
   </link>
 
-  <!-- Wheel joints (continuous for rotation) -->
+  <!-- Wheel joints (continuous for rotation visualization) -->
   <!-- Positions match default mecanum geometry: wheel_base_x=0.30m, wheel_base_y=0.25m -->
   <joint name="wheel_fl_joint" type="continuous">
     <origin xyz="0.15 0.15 0.05" rpy="0 0 0"/>

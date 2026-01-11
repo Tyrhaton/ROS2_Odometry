@@ -53,7 +53,7 @@
   <let name="urdf_path" value="$(var pkg_share)/urdf/mecanum_robot.urdf" />
 
   <!-- Robot State Publisher -->
-  <node pkg="robot_state_publisher" exec="robot_state_publisher" 
+  <node pkg="robot_state_publisher" exec="robot_state_publisher"
         name="robot_state_publisher" output="screen">
     <param name="robot_description" value="'$(command 'cat $(var urdf_path)')'" />
   </node>
@@ -90,23 +90,22 @@
   </node>
 
   <!-- Database handler -->
-  <node pkg="odometry_pkg" exec="database_handler" 
+  <node pkg="odometry_pkg" exec="database_handler"
         name="database_handler" output="screen">
     <param name="database_path" value="$(var database_path)" />
     <param name="subscribe_imu" value="true" />
     <param name="subscribe_acceleration" value="true" />
     <param name="subscribe_velocity" value="true" />
     <param name="subscribe_position" value="true" />
-    <remap from="/odometry/velocity_from_accel" to="/odometry/velocity_from_wheels" />
-    <remap from="/odometry/position_from_accel" to="/odometry/position_from_wheels" />
+    <!-- No remaps needed - position_velocity_approximator publishes to /odometry/position_from_accel -->
   </node>
 
   <!-- Position visualizer (C++) -->
-  <node pkg="odometry_pkg" exec="position_visualizer" 
+  <node pkg="odometry_pkg" exec="position_visualizer"
         name="position_visualizer" output="screen">
     <param name="use_mesh" value="true" />
     <param name="mesh_scale" value="0.001" />
-    <remap from="/odometry/position_from_accel" to="/odometry/position_from_wheels" />
+    <!-- No remap needed - position_velocity_approximator publishes to /odometry/position_from_accel -->
   </node>
 
   <!-- RVIZ2 visualization -->
