@@ -31,6 +31,10 @@
        description="Whether to loop the path" />
   <arg name="drift_correction" default="false"
        description="Enable drift correction in the approximator (true/false)" />
+  <arg name="interval" default="-1"
+       description="Sample interval in milliseconds (overrides YAML sample_rate_hz, -1 = use YAML)" />
+  <arg name="decimalen" default="6"
+       description="Decimal precision for acceleration values (2 = trappetjes, 6 = smooth)" />
   
   <!-- Robot parameters -->
   <arg name="wheel_radius" default="0.05"
@@ -54,17 +58,15 @@
     <param name="robot_description" value="'$(command 'cat $(var urdf_path)')'" />
   </node>
 
-  <!-- YAML Path Simulator -->
-  <node pkg="odometry_pkg" exec="yaml_path_simulator.py" 
-        name="yaml_path_simulator" output="screen">
+  <!-- IMU Simulator (C++) -->
+  <node pkg="odometry_pkg" exec="imu_simulator" 
+        name="imu_simulator" output="screen">
     <param name="path_file" value="$(var pkg_share)/$(var path_file)" />
-    <param name="sensor_type" value="$(var sensor_type)" />
     <param name="initial_x" value="$(var initial_x)" />
     <param name="initial_y" value="$(var initial_y)" />
-    <param name="wheel_radius" value="$(var wheel_radius)" />
-    <param name="wheel_base_x" value="$(var wheel_base_x)" />
-    <param name="wheel_base_y" value="$(var wheel_base_y)" />
     <param name="loop" value="$(var loop)" />
+    <param name="interval" value="$(var interval)" />
+    <param name="decimalen" value="$(var decimalen)" />
   </node>
 
   <!-- Position/Velocity Approximator - Always use position_velocity_approximator for IMU -->
@@ -97,8 +99,8 @@
     <param name="subscribe_position" value="true" />
   </node>
 
-  <!-- Position visualizer -->
-  <node pkg="odometry_pkg" exec="position_visualizer.py" 
+  <!-- Position visualizer (C++) -->
+  <node pkg="odometry_pkg" exec="position_visualizer" 
         name="position_visualizer" output="screen">
     <param name="use_mesh" value="true" />
     <param name="mesh_scale" value="0.001" />

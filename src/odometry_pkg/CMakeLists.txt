@@ -10,8 +10,13 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(odometry_interfaces_pkg REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(urdf REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 # Find SQLite3
 find_package(PkgConfig REQUIRED)
@@ -19,20 +24,13 @@ pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 
 # Build executables
 
-# 1. Sensor data simulator
-add_executable(sensor_data_simulator src/sensor_data_simulator.cpp)
-ament_target_dependencies(sensor_data_simulator
-  rclcpp
-  sensor_msgs
-  odometry_interfaces_pkg
-)
-
-# 2. Position and velocity approximator from acceleration
+# 1. Position and velocity approximator from acceleration
 add_executable(position_velocity_approximator src/position_velocity_approximator.cpp)
 ament_target_dependencies(position_velocity_approximator
   rclcpp
   sensor_msgs
-  odometry_interfaces_pkg
+  geometry_msgs
+  nav_msgs
   urdf
 )
 
@@ -41,7 +39,8 @@ add_executable(mecanum_position_approximator src/mecanum_position_approximator.c
 ament_target_dependencies(mecanum_position_approximator
   rclcpp
   std_msgs
-  odometry_interfaces_pkg
+  geometry_msgs
+  nav_msgs
 )
 
 # 4. Database handler
@@ -49,17 +48,54 @@ add_executable(database_handler src/database_handler.cpp)
 ament_target_dependencies(database_handler
   rclcpp
   sensor_msgs
-  odometry_interfaces_pkg
+  geometry_msgs
+  nav_msgs
 )
 target_include_directories(database_handler PUBLIC ${SQLITE3_INCLUDE_DIRS})
 target_link_libraries(database_handler ${SQLITE3_LIBRARIES})
 
+# 5a. IMU Simulator (C++)
+add_executable(imu_simulator src/imu_simulator.cpp)
+ament_target_dependencies(imu_simulator
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  ament_index_cpp
+)
+target_link_libraries(imu_simulator yaml-cpp)
+
+# 5b. Mecanum Simulator (C++)
+add_executable(mecanum_simulator src/mecanum_simulator.cpp)
+ament_target_dependencies(mecanum_simulator
+  rclcpp
+  sensor_msgs
+  std_msgs
+  geometry_msgs
+  nav_msgs
+  ament_index_cpp
+)
+target_link_libraries(mecanum_simulator yaml-cpp)
+
+# 6. Position Visualizer (C++)
+add_executable(position_visualizer src/position_visualizer.cpp)
+ament_target_dependencies(position_visualizer
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  visualization_msgs
+  tf2_ros
+  ament_index_cpp
+)
+
 # Install executables
 install(TARGETS
-  sensor_data_simulator
   position_velocity_approximator
   mecanum_position_approximator
   database_handler
+  imu_simulator
+  mecanum_simulator
+  position_visualizer
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -73,13 +109,7 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}/
 )
 
-install(PROGRAMS
-  scripts/wheel_encoder_simulator.py
-  scripts/position_visualizer.py
-  scripts/imu_simulator.py
-  scripts/yaml_path_simulator.py
-  DESTINATION lib/${PROJECT_NAME}
-)
+# No Python scripts - pure C++ package
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

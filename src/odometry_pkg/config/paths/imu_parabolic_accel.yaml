@@ -18,51 +18,51 @@ path:
   name: "parabolic_acceleration"
   description: "Parabolic (quadratic) acceleration profile for IMU simulation"
   duration: 30.0
-  sample_rate_hz: 5  # 100ms intervals = 10 Hz
+  sample_rate_hz: 100 # 10ms intervals = 100 Hz (smooth lines for CSV export)
 
   # For parabolic type: a(t) = a * t_rel² + b * t_rel + c
   # where t_rel = t - t_start
   segments:
-    - interval: [0.0, 5.0]
-      type: constant
-      accel_x: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 0.0, 5.0 ]
+    type: constant
+    accel_x: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [5.0, 9.0]
-      type: parabolic
-      # a(t) = -0.025 * (t-5)(t-9) with t_rel = t - 5
-      # = -0.025 * t_rel * (t_rel - 4)
-      # = -0.025 * t_rel² + 0.1 * t_rel
-      # So: a=-0.025, b=0.1, c=0
-      accel_x:
-        a: -0.025
-        b: 0.1
-        c: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 5.0, 9.0 ]
+    type: parabolic
+    # a(t) = -0.025 * (t-5)(t-9) with t_rel = t - 5
+    # = -0.025 * t_rel * (t_rel - 4)
+    # = -0.025 * t_rel² + 0.1 * t_rel
+    # So: a=-0.025, b=0.1, c=0
+    accel_x:
+      a: -0.025
+      b: 0.1
+      c: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [9.0, 15.0]
-      type: constant
-      accel_x: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 9.0, 15.0 ]
+    type: constant
+    accel_x: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [15.0, 19.0]
-      type: parabolic
-      # a(t) = 0.025 * (t-15)(t-19) with t_rel = t - 15
-      # = 0.025 * t_rel * (t_rel - 4)
-      # = 0.025 * t_rel² - 0.1 * t_rel
-      # So: a=0.025, b=-0.1, c=0
-      accel_x:
-        a: 0.025
-        b: -0.1
-        c: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 15.0, 19.0 ]
+    type: parabolic
+    # a(t) = 0.025 * (t-15)(t-19) with t_rel = t - 15
+    # = 0.025 * t_rel * (t_rel - 4)
+    # = 0.025 * t_rel² - 0.1 * t_rel
+    # So: a=0.025, b=-0.1, c=0
+    accel_x:
+      a: 0.025
+      b: -0.1
+      c: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [19.0, 30.0]
-      type: constant
-      accel_x: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 19.0, 30.0 ]
+    type: constant
+    accel_x: 0.0
+    accel_y: 0.0
+    accel_z: 0.0

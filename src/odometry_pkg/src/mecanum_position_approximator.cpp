@@ -17,8 +17,8 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
-#include "odometry_interfaces_pkg/msg/velocity_data.hpp"
-#include "odometry_interfaces_pkg/msg/position_data.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 
 using namespace std::chrono_literals;
 
@@ -70,16 +70,16 @@ public:
             std::bind(&MecanumPositionApproximator::wheel_velocity_callback, this, std::placeholders::_1));
 
         // Create subscriber for position reset
-        position_reset_sub_ = this->create_subscription<odometry_interfaces_pkg::msg::PositionData>(
+        position_reset_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
             "/position/corrected",
             10,
             std::bind(&MecanumPositionApproximator::position_reset_callback, this, std::placeholders::_1));
 
         // Create publishers
-        velocity_pub_ = this->create_publisher<odometry_interfaces_pkg::msg::VelocityData>(
+        velocity_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(
             "/odometry/velocity_from_wheels", 10);
 
-        position_pub_ = this->create_publisher<odometry_interfaces_pkg::msg::PositionData>(
+        position_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             "/odometry/position_from_wheels", 10);
 
         RCLCPP_INFO(this->get_logger(), "Mecanum Position Approximator started");
@@ -94,16 +94,26 @@ private:
      * @brief Callback for position reset messages
      * @param msg Corrected position from position determinator
      */
-    void position_reset_callback(const odometry_interfaces_pkg::msg::PositionData::SharedPtr msg)
+    void position_reset_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     {
+        // Extract position from pose
+        double pos_x = msg->pose.pose.position.x;
+        double pos_y = msg->pose.pose.position.y;
+        double pos_z = msg->pose.pose.position.z;
+        
+        // Extract yaw from quaternion
+        double qz = msg->pose.pose.orientation.z;
+        double qw = msg->pose.pose.orientation.w;
+        double alpha = 2.0 * std::atan2(qz, qw);
+        
         RCLCPP_INFO(this->get_logger(), "Resetting position to (%.3f, %.3f, %.3f), alpha: %.3f",
-                    msg->x, msg->y, msg->z, msg->alpha);
+                    pos_x, pos_y, pos_z, alpha);
 
         // Reset position and orientation
-        position_x_ = msg->x;
-        position_y_ = msg->y;
-        position_z_ = msg->z;
-        alpha_ = msg->alpha;
+        position_x_ = pos_x;
+        position_y_ = pos_y;
+        position_z_ = pos_z;
+        alpha_ = alpha;
 
         // Invalidate last time to restart integration
         last_time_valid_ = false;
@@ -203,23 +213,28 @@ private:
         alpha_ = std::atan2(std::sin(alpha_), std::cos(alpha_));
 
         // Publish velocity (in map frame)
-        auto vel_msg = odometry_interfaces_pkg::msg::VelocityData();
+        auto vel_msg = geometry_msgs::msg::TwistStamped();
         vel_msg.header.stamp = current_time;
         vel_msg.header.frame_id = "map";
-        vel_msg.linear_x = velocity_x_map;
-        vel_msg.linear_y = velocity_y_map;
-        vel_msg.linear_z = 0.0;
-        vel_msg.angular_z = angular_velocity_z_;
+        vel_msg.twist.linear.x = velocity_x_map;
+        vel_msg.twist.linear.y = velocity_y_map;
+        vel_msg.twist.linear.z = 0.0;
+        vel_msg.twist.angular.z = angular_velocity_z_;
         velocity_pub_->publish(vel_msg);
 
-        // Publish position
-        auto pos_msg = odometry_interfaces_pkg::msg::PositionData();
+        // Publish position as Odometry
+        auto pos_msg = nav_msgs::msg::Odometry();
         pos_msg.header.stamp = current_time;
         pos_msg.header.frame_id = "map";
-        pos_msg.x = position_x_;
-        pos_msg.y = position_y_;
-        pos_msg.z = position_z_;
-        pos_msg.alpha = alpha_;
+        pos_msg.child_frame_id = "base_link";
+        pos_msg.pose.pose.position.x = position_x_;
+        pos_msg.pose.pose.position.y = position_y_;
+        pos_msg.pose.pose.position.z = position_z_;
+        pos_msg.pose.pose.orientation.z = std::sin(alpha_ / 2.0);
+        pos_msg.pose.pose.orientation.w = std::cos(alpha_ / 2.0);
+        pos_msg.twist.twist.linear.x = velocity_x_map;
+        pos_msg.twist.twist.linear.y = velocity_y_map;
+        pos_msg.twist.twist.angular.z = angular_velocity_z_;
         position_pub_->publish(pos_msg);
 
         // Log position every second for monitoring
@@ -252,9 +267,9 @@ private:
 
     // ROS communication
     rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr wheel_vel_sub_;
-    rclcpp::Subscription<odometry_interfaces_pkg::msg::PositionData>::SharedPtr position_reset_sub_;
-    rclcpp::Publisher<odometry_interfaces_pkg::msg::VelocityData>::SharedPtr velocity_pub_;
-    rclcpp::Publisher<odometry_interfaces_pkg::msg::PositionData>::SharedPtr position_pub_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr position_reset_sub_;
+    rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr velocity_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr position_pub_;
 };
 
 int main(int argc, char * argv[])

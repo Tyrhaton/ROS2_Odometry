@@ -14,65 +14,65 @@ path:
   name: "linear_acceleration"
   description: "Linear acceleration profile for IMU simulation"
   duration: 30.0
-  sample_rate_hz: 10  # 100ms intervals = 10 Hz
+  sample_rate_hz: 100 # 10ms intervals = 100 Hz (smooth lines for CSV export)
 
   # For linear type: a(t) = m * (t - t_start) + b
   # where m is the slope and b is the initial value at t_start
   segments:
-    - interval: [0.0, 5.0]
-      type: constant
-      accel_x: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 0.0, 5.0 ]
+    type: constant
+    accel_x: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [5.0, 7.0]
-      type: linear
-      # a(t) = 0.05 * (t - 5) -> m=0.05, b=0
-      accel_x:
-        m: 0.05
-        b: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 5.0, 7.0 ]
+    type: linear
+    # a(t) = 0.05 * (t - 5) -> m=0.05, b=0
+    accel_x:
+      m: 0.05
+      b: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [7.0, 9.0]
-      type: linear
-      # a(t) = -0.05 * (t - 9) = -0.05*t + 0.45
-      # At t=7: a = -0.05*(7-9) = 0.1, at t=9: a = 0
-      # So relative: m=-0.05, b=0.1 (since at t_start=7, we have 0.1)
-      accel_x:
-        m: -0.05
-        b: 0.1
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 7.0, 9.0 ]
+    type: linear
+    # a(t) = -0.05 * (t - 9) = -0.05*t + 0.45
+    # At t=7: a = -0.05*(7-9) = 0.1, at t=9: a = 0
+    # So relative: m=-0.05, b=0.1 (since at t_start=7, we have 0.1)
+    accel_x:
+      m: -0.05
+      b: 0.1
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [9.0, 15.0]
-      type: constant
-      accel_x: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 9.0, 15.0 ]
+    type: constant
+    accel_x: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [15.0, 17.0]
-      type: linear
-      # a(t) = -0.05 * (t - 15) -> m=-0.05, b=0
-      accel_x:
-        m: -0.05
-        b: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 15.0, 17.0 ]
+    type: linear
+    # a(t) = -0.05 * (t - 15) -> m=-0.05, b=0
+    accel_x:
+      m: -0.05
+      b: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [17.0, 19.0]
-      type: linear
-      # a(t) = 0.05 * (t - 19) 
-      # At t=17: a = 0.05*(17-19) = -0.1, at t=19: a = 0
-      # Relative: m=0.05, b=-0.1
-      accel_x:
-        m: 0.05
-        b: -0.1
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 17.0, 19.0 ]
+    type: linear
+    # a(t) = 0.05 * (t - 19) 
+    # At t=17: a = 0.05*(17-19) = -0.1, at t=19: a = 0
+    # Relative: m=0.05, b=-0.1
+    accel_x:
+      m: 0.05
+      b: -0.1
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [19.0, 30.0]
-      type: constant
-      accel_x: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 19.0, 30.0 ]
+    type: constant
+    accel_x: 0.0
+    accel_y: 0.0
+    accel_z: 0.0

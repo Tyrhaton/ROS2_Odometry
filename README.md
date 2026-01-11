@@ -10,6 +10,77 @@ ROS 2 workspace for experimenting with odometry estimation and visualization on 
 
 Use the Python or XML launch variants to start either the mecanum wheel simulation or the ESP32 IMU pipeline, then inspect TF, path, and mesh overlays in RViz.
 
+---
+
+## 🚀 Quick Reference - Copy & Paste Commands
+
+### Build & Source (run once)
+```bash
+cd ~/school_shit_ros2/fix_imu_tilmann_assignment/ROS2_Odometry
+colcon build --packages-select odometry_pkg
+source install/setup.zsh   # or setup.bash
+```
+
+### IMU Simulator (Acceleratie-gebaseerd)
+
+```bash
+# Constant acceleratie - smooth (10ms, 6 decimalen)
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_constant_accel.yaml \
+  interval:=10 decimalen:=6
+
+# Constant acceleratie - trappetjes (100ms, 2 decimalen)
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_constant_accel.yaml \
+  interval:=100 decimalen:=2
+
+# Linear acceleratie - smooth
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_linear_accel.yaml \
+  interval:=10 decimalen:=6
+
+# Linear acceleratie - trappetjes
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_linear_accel.yaml \
+  interval:=100 decimalen:=2
+
+# Parabolic acceleratie - smooth
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_parabolic_accel.yaml \
+  interval:=10 decimalen:=6
+
+# Parabolic acceleratie - trappetjes
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_parabolic_accel.yaml \
+  interval:=100 decimalen:=2
+```
+
+### Mecanum Simulator (Snelheid-gebaseerd)
+
+```bash
+# Mecanum velocity - smooth (10ms, 6 decimalen)
+ros2 launch odometry_pkg yaml_path_mecanum.launch.xml \
+  path_file:=config/paths/mecanum_velocity_path.yaml \
+  interval:=10 decimalen:=6
+
+# Mecanum velocity - trappetjes (100ms, 2 decimalen)
+ros2 launch odometry_pkg yaml_path_mecanum.launch.xml \
+  path_file:=config/paths/mecanum_velocity_path.yaml \
+  interval:=100 decimalen:=2
+```
+
+### Parameter Uitleg
+
+| Parameter | Waarden | Effect |
+|-----------|---------|--------|
+| `interval` | `10` | 10ms = 100Hz (smooth) |
+| `interval` | `100` | 100ms = 10Hz (trappetjes zichtbaar) |
+| `interval` | `500` | 500ms = 2Hz (grove stappen) |
+| `decimalen` | `6` | Volledige precisie (smooth lijn) |
+| `decimalen` | `2` | Afgerond op 0.01 (trappetjes) |
+
+---
+
 ## IMU Simulator - Custom Motion Paths
 
 The IMU simulator supports configurable motion paths via launch file parameters. You can define complex trajectories with precise control over velocities, rotations, and timing.
@@ -160,6 +231,18 @@ The YAML Path Simulator allows you to define custom motion paths in YAML files w
 
 where `t_rel = t - t_start` is the time relative to the segment start.
 
+### Lagrange Interpolation
+
+The simulator uses **piecewise linear Lagrange interpolation** to calculate acceleration values between defined points. This provides:
+
+- **Smooth transitions** at any sample rate
+- **Mathematically accurate** interpolation using the Lagrange polynomial formula
+- **Configurable precision** via the `decimalen` parameter
+
+The Lagrange formula used for linear interpolation between two points:
+
+$$P(t) = f(x_i) \cdot \frac{t - x_{i+1}}{x_i - x_{i+1}} + f(x_{i+1}) \cdot \frac{t - x_i}{x_{i+1} - x_i}$$
+
 ### Quick Start
 
 ```bash
@@ -169,24 +252,63 @@ source install/setup.zsh
 
 # Run with constant acceleration (IMU mode)
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
-  path_file:=config/paths/imu_constant_accel.yaml \
-  sensor_type:=imu
+  path_file:=config/paths/imu_constant_accel.yaml
 
-# Run with linear acceleration
+# Run with linear acceleration - smooth (10ms interval, 6 decimals)
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/imu_linear_accel.yaml \
-  sensor_type:=imu
+  interval:=10 decimalen:=6
+
+# Run with linear acceleration - "trappetjes" effect (100ms interval, 2 decimals)
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_linear_accel.yaml \
+  interval:=100 decimalen:=2
 
 # Run with parabolic acceleration
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
-  path_file:=config/paths/imu_parabolic_accel.yaml \
-  sensor_type:=imu
+  path_file:=config/paths/imu_parabolic_accel.yaml
 
 # Run with mecanum wheel velocities
 ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/mecanum_velocity_path.yaml \
   sensor_type:=mecanum
 ```
+
+### Sample Rate & Precision Control
+
+The simulator provides two key parameters to control output resolution:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `interval` | `-1` | Sample interval in milliseconds. Overrides YAML `sample_rate_hz`. Examples: `10` (100Hz), `100` (10Hz), `500` (2Hz) |
+| `decimalen` | `6` | Decimal precision for acceleration values. Use `2` for visible "trappetjes" (stair-stepping), `6` for smooth lines |
+
+**Examples:**
+
+```bash
+# Smooth line (high precision, high sample rate)
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_linear_accel.yaml \
+  interval:=10 decimalen:=6
+
+# Visible stair-steps (low precision, low sample rate)  
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_linear_accel.yaml \
+  interval:=100 decimalen:=2
+
+# Very coarse sampling (500ms = 2Hz)
+ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
+  path_file:=config/paths/imu_linear_accel.yaml \
+  interval:=500 decimalen:=2
+```
+
+**How `decimalen` affects output:**
+
+| decimalen | Rounding | Effect |
+|-----------|----------|--------|
+| `2` | 0.01 | Values repeat → visible "trappetjes" |
+| `3` | 0.001 | Slight stepping |
+| `6` | 0.000001 | Smooth line (default) |
 
 ### YAML Path File Format
 
@@ -267,6 +389,8 @@ path:
 |-----------|---------|-------------|
 | `path_file` | `config/paths/imu_constant_accel.yaml` | Path to YAML file |
 | `sensor_type` | `imu` | `imu` or `mecanum` |
+| `interval` | `-1` | Sample interval in ms (-1 = use YAML sample_rate_hz) |
+| `decimalen` | `6` | Decimal precision (2 = trappetjes, 6 = smooth) |
 | `use_rviz` | `true` | Launch RViz visualization |
 | `loop` | `false` | Loop the path continuously |
 | `initial_x` | `0.0` | Starting X position (m) |

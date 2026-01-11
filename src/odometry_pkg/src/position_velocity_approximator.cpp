@@ -18,8 +18,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
-#include "odometry_interfaces_pkg/msg/velocity_data.hpp"
-#include "odometry_interfaces_pkg/msg/position_data.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include <urdf/model.h>
 
@@ -93,16 +93,16 @@ public:
             std::bind(&PositionVelocityApproximator::imu_callback, this, std::placeholders::_1));
 
         // Create subscriber for position reset (from position determinator)
-        position_reset_sub_ = this->create_subscription<odometry_interfaces_pkg::msg::PositionData>(
+        position_reset_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
             "/position/corrected",
             10,
             std::bind(&PositionVelocityApproximator::position_reset_callback, this, std::placeholders::_1));
 
         // Create publishers
-        velocity_pub_ = this->create_publisher<odometry_interfaces_pkg::msg::VelocityData>(
+        velocity_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(
             "/odometry/velocity_from_accel", 10);
 
-        position_pub_ = this->create_publisher<odometry_interfaces_pkg::msg::PositionData>(
+        position_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             "/odometry/position_from_accel", 10);
         wheel_vel_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>(
             "/odometry/wheel_speeds_from_accel", 10);
@@ -134,37 +134,50 @@ private:
      * If position values are NaN, only velocity is updated (keep current position).
      * Otherwise, both position and velocity are reset.
      */
-    void position_reset_callback(const odometry_interfaces_pkg::msg::PositionData::SharedPtr msg)
+    void position_reset_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     {
+        // Extract position from pose
+        double pos_x = msg->pose.pose.position.x;
+        double pos_y = msg->pose.pose.position.y;
+        double pos_z = msg->pose.pose.position.z;
+        
+        // Extract yaw from quaternion
+        double qz = msg->pose.pose.orientation.z;
+        double qw = msg->pose.pose.orientation.w;
+        double alpha = 2.0 * std::atan2(qz, qw);
+        
+        // Extract velocities from twist
+        double vx = msg->twist.twist.linear.x;
+        double vy = msg->twist.twist.linear.y;
+        
         // Check if this is a velocity-only update (NaN position values)
-        bool velocity_only = std::isnan(msg->x) || std::isnan(msg->y);
+        bool velocity_only = std::isnan(pos_x) || std::isnan(pos_y);
         
         if (velocity_only) {
             // Velocity-only update: keep current position, just update velocities
             RCLCPP_INFO(this->get_logger(), 
                 "Velocity update: vx=%.3f -> %.3f, vy=%.3f -> %.3f (position unchanged)",
-                velocity_x_, msg->initial_vx, velocity_y_, msg->initial_vy);
+                velocity_x_, vx, velocity_y_, vy);
             
-            velocity_x_ = msg->initial_vx;
-            velocity_y_ = msg->initial_vy;
+            velocity_x_ = vx;
+            velocity_y_ = vy;
             velocity_z_ = 0.0;
             angular_velocity_z_ = 0.0;
         } else {
             // Full reset: update both position and velocity
             RCLCPP_INFO(this->get_logger(), "Resetting position to (%.3f, %.3f, %.3f), alpha: %.3f",
-                        msg->x, msg->y, msg->z, msg->alpha);
-            RCLCPP_INFO(this->get_logger(), "Initial velocities: vx=%.3f, vy=%.3f",
-                        msg->initial_vx, msg->initial_vy);
+                        pos_x, pos_y, pos_z, alpha);
+            RCLCPP_INFO(this->get_logger(), "Initial velocities: vx=%.3f, vy=%.3f", vx, vy);
 
             // Reset position and orientation
-            position_x_ = msg->x;
-            position_y_ = msg->y;
-            position_z_ = msg->z;
-            alpha_ = msg->alpha;
+            position_x_ = pos_x;
+            position_y_ = pos_y;
+            position_z_ = pos_z;
+            alpha_ = alpha;
 
             // Set initial velocities from message
-            velocity_x_ = msg->initial_vx;
-            velocity_y_ = msg->initial_vy;
+            velocity_x_ = vx;
+            velocity_y_ = vy;
             velocity_z_ = 0.0;
             angular_velocity_z_ = 0.0;
         }
@@ -232,9 +245,15 @@ private:
         // Calculate angular velocity magnitude
         double gyro_magnitude = std::abs(angular_vel_z);
 
+        // Calculate current velocity magnitude
+        double velocity_magnitude = std::sqrt(velocity_x_ * velocity_x_ +
+                                             velocity_y_ * velocity_y_);
+
         // Detect if sensor is static (no significant movement)
+        // IMPORTANT: Check BOTH acceleration AND velocity to avoid damping during cruise phases!
         bool is_static = (accel_magnitude < static_accel_threshold_) &&
-                         (gyro_magnitude < static_gyro_threshold_);
+                         (gyro_magnitude < static_gyro_threshold_) &&
+                         (velocity_magnitude < 0.1);  // Only static if velocity is also low
 
         // Store old velocity for trapezoidal position integration
         double old_velocity_x = velocity_x_;
@@ -315,13 +334,13 @@ private:
         alpha_ = std::atan2(std::sin(alpha_), std::cos(alpha_));
 
         // Publish velocity
-        auto vel_msg = odometry_interfaces_pkg::msg::VelocityData();
+        auto vel_msg = geometry_msgs::msg::TwistStamped();
         vel_msg.header.stamp = current_time;
         vel_msg.header.frame_id = "map";
-        vel_msg.linear_x = velocity_x_;
-        vel_msg.linear_y = velocity_y_;
-        vel_msg.linear_z = velocity_z_;
-        vel_msg.angular_z = angular_velocity_z_;
+        vel_msg.twist.linear.x = velocity_x_;
+        vel_msg.twist.linear.y = velocity_y_;
+        vel_msg.twist.linear.z = velocity_z_;
+        vel_msg.twist.angular.z = angular_velocity_z_;
         velocity_pub_->publish(vel_msg);
 
         // Compute wheel angular velocities from robot-frame velocities
@@ -349,14 +368,21 @@ private:
         js.velocity = {w[0], w[1], w[2], w[3]};
         joint_state_pub_->publish(js);
 
-        // Publish position
-        auto pos_msg = odometry_interfaces_pkg::msg::PositionData();
+        // Publish position as Odometry
+        auto pos_msg = nav_msgs::msg::Odometry();
         pos_msg.header.stamp = current_time;
         pos_msg.header.frame_id = "map";
-        pos_msg.x = position_x_;
-        pos_msg.y = position_y_;
-        pos_msg.z = position_z_;
-        pos_msg.alpha = alpha_;
+        pos_msg.child_frame_id = "base_link";
+        pos_msg.pose.pose.position.x = position_x_;
+        pos_msg.pose.pose.position.y = position_y_;
+        pos_msg.pose.pose.position.z = position_z_;
+        // Convert yaw to quaternion
+        pos_msg.pose.pose.orientation.z = std::sin(alpha_ / 2.0);
+        pos_msg.pose.pose.orientation.w = std::cos(alpha_ / 2.0);
+        // Also include velocity in twist
+        pos_msg.twist.twist.linear.x = velocity_x_;
+        pos_msg.twist.twist.linear.y = velocity_y_;
+        pos_msg.twist.twist.angular.z = angular_velocity_z_;
         position_pub_->publish(pos_msg);
 
         // Log position every second for monitoring
@@ -468,9 +494,9 @@ private:
 
     // ROS communication
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
-    rclcpp::Subscription<odometry_interfaces_pkg::msg::PositionData>::SharedPtr position_reset_sub_;
-    rclcpp::Publisher<odometry_interfaces_pkg::msg::VelocityData>::SharedPtr velocity_pub_;
-    rclcpp::Publisher<odometry_interfaces_pkg::msg::PositionData>::SharedPtr position_pub_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr position_reset_sub_;
+    rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr velocity_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr position_pub_;
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr wheel_vel_pub_;
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
 };

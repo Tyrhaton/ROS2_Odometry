@@ -13,7 +13,6 @@
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
-  <depend>odometry_interfaces_pkg</depend>
   
   <!-- For ESP32 IMU integration -->
   <exec_depend>imu_sensor_pkg</exec_depend>

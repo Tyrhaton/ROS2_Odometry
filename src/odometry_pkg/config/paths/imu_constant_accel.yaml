@@ -1,7 +1,7 @@
 # IMU Constant Acceleration Path
 # Assignment 4 - First file (constant acceleration)
 # Duration: 30 seconds, measurements every 100ms
-# 
+#
 # Interval [0,5] acceleration = 0
 # Interval [5,9] acceleration = 0.1
 # Interval [9,15] acceleration = 0
@@ -12,37 +12,37 @@ path:
   name: "constant_acceleration"
   description: "Constant acceleration profile for IMU simulation"
   duration: 30.0
-  sample_rate_hz: 10  # 100ms intervals = 10 Hz
+  sample_rate_hz: 100 # 10ms intervals = 100 Hz (smooth lines for CSV export)
 
   # For IMU: specify acceleration values (X, Y, Z)
   # The approximator calculates velocity and position from these
   segments:
-    - interval: [0.0, 5.0]
-      type: constant
-      accel_x: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 0.0, 5.0 ]
+    type: constant
+    accel_x: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [5.0, 9.0]
-      type: constant
-      accel_x: 0.1
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 5.0, 9.0 ]
+    type: constant
+    accel_x: 0.1
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [9.0, 15.0]
-      type: constant
-      accel_x: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 9.0, 15.0 ]
+    type: constant
+    accel_x: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [15.0, 19.0]
-      type: constant
-      accel_x: -0.1
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 15.0, 19.0 ]
+    type: constant
+    accel_x: -0.1
+    accel_y: 0.0
+    accel_z: 0.0
 
-    - interval: [19.0, 30.0]
-      type: constant
-      accel_x: 0.0
-      accel_y: 0.0
-      accel_z: 0.0
+  - interval: [ 19.0, 30.0 ]
+    type: constant
+    accel_x: 0.0
+    accel_y: 0.0
+    accel_z: 0.0
