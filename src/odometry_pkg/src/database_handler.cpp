@@ -382,8 +382,8 @@ private:
         if (enable_csv_export_ && velocity_csv_.is_open()) {
             rclcpp::Time msg_time(msg->header.stamp);
             
-            // Use message timestamp directly (simulator uses sim_time starting from 0)
-            double relative_time = msg_time.seconds();
+            // Calculate relative time from start for proper time values
+            double relative_time = (msg_time - start_time_).seconds();
             velocity_csv_ << relative_time << ","
                         << msg->twist.linear.x << "," 
                         << msg->twist.linear.y << "," 
@@ -432,8 +432,8 @@ private:
         if (enable_csv_export_ && position_csv_.is_open()) {
             rclcpp::Time msg_time(msg->header.stamp);
             
-            // Use message timestamp directly (simulator uses sim_time starting from 0)
-            double relative_time = msg_time.seconds();
+            // Calculate relative time from start for proper time values
+            double relative_time = (msg_time - start_time_).seconds();
             position_csv_ << relative_time << ","
                         << msg->pose.pose.position.x << "," 
                         << msg->pose.pose.position.y << "," 

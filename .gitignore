@@ -1,5 +1,6 @@
 /build
 /install
 /log
+/csvexport
 *.db
 *.db-journal
