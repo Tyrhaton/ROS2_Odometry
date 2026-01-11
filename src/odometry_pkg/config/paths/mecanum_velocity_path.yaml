@@ -13,7 +13,7 @@ path:
   name: "mecanum_velocity_example"
   description: "Example velocity profile for mecanum wheel simulation"
   duration: 30.0
-  sample_rate_hz: 50  # 50 Hz for wheel encoders
+  sample_rate_hz: 50  # Hz for wheel encoders
 
   segments:
     # Phase 1: Stand still

@@ -97,6 +97,8 @@
     <param name="subscribe_acceleration" value="true" />
     <param name="subscribe_velocity" value="true" />
     <param name="subscribe_position" value="true" />
+    <remap from="/odometry/velocity_from_accel" to="/odometry/velocity_from_wheels" />
+    <remap from="/odometry/position_from_accel" to="/odometry/position_from_wheels" />
   </node>
 
   <!-- Position visualizer (C++) -->
@@ -104,6 +106,7 @@
         name="position_visualizer" output="screen">
     <param name="use_mesh" value="true" />
     <param name="mesh_scale" value="0.001" />
+    <remap from="/odometry/position_from_accel" to="/odometry/position_from_wheels" />
   </node>
 
   <!-- RVIZ2 visualization -->
