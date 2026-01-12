@@ -1,27 +1,26 @@
 /**
  * @file path_solver.cpp
- * @brief Path Solver - Lost automatisch onbekende waarden op via analytische integratie
+ * @brief Path Solver - Automatically solves unknown values using analytical integration
  *
- * Dit programma leest een YAML-bestand met "onbekend" waarden en lost deze op
- * door de kinematische vergelijkingen symbolisch te integreren.
+ * This program reads a YAML file with "onbekend" (unknown) values and solves them
+ * by symbolically integrating the kinematic equations.
  *
- * METHODE: Analytische integratie
- * ================================
+ * Method: Analytical Integration
  *
- * Kinematische vergelijkingen (constante acceleratie):
- *   v(t) = v0 + a * t                    (integraal van a)
- *   x(t) = x0 + v0 * t + 0.5 * a * t^2   (integraal van v)
+ * Kinematic equations (constant acceleration):
+ *   v(t) = v0 + a * t                    (integral of a)
+ *   x(t) = x0 + v0 * t + 0.5 * a * t^2   (integral of v)
  *
- * Voor elk segment berekenen we de bijdrage aan positie en snelheid.
- * Als een segment duur T onbekend is, krijgen we een vergelijking in T.
+ * For each segment we calculate the contribution to position and velocity.
+ * If a segment duration T is unknown, we get an equation in T.
  *
- * Voorbeeld:
- *   Segment met a=0, duur=T, beginsnelheid=v0:
- *   - Δv = a * T = 0
- *   - Δx = v0 * T + 0.5 * a * T^2 = v0 * T
+ * Example:
+ *   Segment with a=0, duration=T, initial velocity=v0:
+ *   - delta_v = a * T = 0
+ *   - delta_x = v0 * T + 0.5 * a * T^2 = v0 * T
  *
- *   Dit geeft: x_eind = x_begin + v0 * T
- *   Als x_eind bekend is: T = (x_eind - x_begin) / v0
+ *   This gives: x_end = x_start + v0 * T
+ *   If x_end is known: T = (x_end - x_start) / v0
  *
  * @author Group g1
  * @date 2026-01-12
@@ -91,28 +90,28 @@ struct Constraint {
  * @struct SymbolicExpression
  * @brief Represents a polynomial expression in T: a0 + a1*T + a2*T^2
  *
- * Dit wordt gebruikt om symbolisch te integreren zonder numerieke waarde voor T
+ * Used for symbolic integration without a numeric value for T
  */
 struct SymbolicExpression {
-    double a0{0.0};  // Constante term
-    double a1{0.0};  // Coëfficiënt van T
-    double a2{0.0};  // Coëfficiënt van T^2
+    double a0{0.0};  // Constant term
+    double a1{0.0};  // Coefficient of T
+    double a2{0.0};  // Coefficient of T^2
 
     SymbolicExpression() = default;
     SymbolicExpression(double c) : a0(c), a1(0), a2(0) {}
     SymbolicExpression(double c0, double c1, double c2) : a0(c0), a1(c1), a2(c2) {}
 
-    // Evalueer voor gegeven T
+    // Evaluate for given T
     double evaluate(double T) const {
         return a0 + a1 * T + a2 * T * T;
     }
 
-    // Optellen
+    // Addition
     SymbolicExpression operator+(const SymbolicExpression& other) const {
         return SymbolicExpression(a0 + other.a0, a1 + other.a1, a2 + other.a2);
     }
 
-    // Vermenigvuldigen met constante
+    // Multiply by constant
     SymbolicExpression operator*(double c) const {
         return SymbolicExpression(a0 * c, a1 * c, a2 * c);
     }
@@ -303,38 +302,38 @@ private:
     }
 
     /**
-     * @brief Integreer segment met constante acceleratie
+     * @brief Integrate segment with constant acceleration
      *
-     * v(t) = v0 + a * dt        ->  Δv = a * dt
-     * x(t) = x0 + v0*dt + 0.5*a*dt^2  ->  Δx = v0*dt + 0.5*a*dt^2
+     * v(t) = v0 + a * dt        ->  delta_v = a * dt
+     * x(t) = x0 + v0*dt + 0.5*a*dt^2  ->  delta_x = v0*dt + 0.5*a*dt^2
      */
     void integrate_segment(double& pos_x, double& pos_y, double& vel_x, double& vel_y,
                           double accel_x, double accel_y, double duration)
     {
-        // Positie update (met huidige snelheid)
+        // Position update (with current velocity)
         pos_x += vel_x * duration + 0.5 * accel_x * duration * duration;
         pos_y += vel_y * duration + 0.5 * accel_y * duration * duration;
 
-        // Snelheid update
+        // Velocity update
         vel_x += accel_x * duration;
         vel_y += accel_y * duration;
     }
 
     /**
-     * @brief Los op via analytische integratie
+     * @brief Solve using analytical integration
      *
-     * Strategie:
-     * 1. Integreer alle bekende segmenten vóór de onbekende
-     * 2. Stel symbolische vergelijking op voor segment met onbekende T
-     * 3. Integreer alle segmenten ná de onbekende (hun bijdrage hangt mogelijk af van T)
-     * 4. Los de vergelijking op: target = f(T)
+     * Strategy:
+     * 1. Integrate all known segments before the unknown
+     * 2. Set up symbolic equation for segment with unknown T
+     * 3. Integrate all segments after the unknown (their contribution may depend on T)
+     * 4. Solve the equation: target = f(T)
      */
     bool solve_by_integration()
     {
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "===== ANALYTISCHE INTEGRATIE =====");
+        RCLCPP_INFO(this->get_logger(), "ANALYTICAL INTEGRATION");
 
-        // Vind segment met onbekende tijd
+        // Find segment with unknown time
         int unknown_segment_idx = -1;
         for (size_t i = 0; i < segments_.size(); ++i) {
             if (segments_[i].end_is_unknown) {
@@ -344,11 +343,11 @@ private:
         }
 
         if (unknown_segment_idx == -1) {
-            RCLCPP_INFO(this->get_logger(), "Geen onbekende gevonden - path is compleet");
+            RCLCPP_INFO(this->get_logger(), "No unknown found - path is complete");
             return true;
         }
 
-        // Vind constraint
+        // Find constraint
         double target_position_x = 0.0;
         bool has_position_constraint = false;
         for (const auto& c : constraints_) {
@@ -360,16 +359,14 @@ private:
         }
 
         if (!has_position_constraint) {
-            RCLCPP_ERROR(this->get_logger(), "Geen final_position_x constraint gevonden");
+            RCLCPP_ERROR(this->get_logger(), "No final_position_x constraint found");
             return false;
         }
 
-        RCLCPP_INFO(this->get_logger(), "Target positie: x = %.4f m", target_position_x);
-        RCLCPP_INFO(this->get_logger(), "Onbekende in segment %d", unknown_segment_idx + 1);
+        RCLCPP_INFO(this->get_logger(), "Target position: x = %.4f m", target_position_x);
+        RCLCPP_INFO(this->get_logger(), "Unknown in segment %d", unknown_segment_idx + 1);
 
-        // ============================================
-        // STAP 1: Integreer segmenten VOOR de onbekende
-        // ============================================
+        // Step 1: Integrate segments BEFORE the unknown
         double pos_x = initial_state_.position_x;
         double pos_y = initial_state_.position_y;
         double vel_x = initial_state_.velocity_x;
@@ -377,7 +374,7 @@ private:
         double time = 0.0;
 
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "Stap 1: Integreer bekende segmenten vóór onbekende");
+        RCLCPP_INFO(this->get_logger(), "Step 1: Integrate known segments before unknown");
         RCLCPP_INFO(this->get_logger(), "  Start: t=%.2f x=%.4f v=%.4f", time, pos_x, vel_x);
 
         for (int i = 0; i < unknown_segment_idx; ++i) {
@@ -394,58 +391,54 @@ private:
             integrate_segment(pos_x, pos_y, vel_x, vel_y, a, segments_[i].accel_y, dt);
             time = segments_[i].end_time;
 
-            RCLCPP_INFO(this->get_logger(), "    Na segment: t=%.2f x=%.4f v=%.4f", time, pos_x, vel_x);
+            RCLCPP_INFO(this->get_logger(), "    After segment: t=%.2f x=%.4f v=%.4f", time, pos_x, vel_x);
         }
 
-        // Sla state op vóór onbekende segment
+        // Store state before unknown segment
         double pos_before_unknown = pos_x;
         double vel_before_unknown = vel_x;
         double time_before_unknown = time;
 
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "State vóór onbekende segment:");
+        RCLCPP_INFO(this->get_logger(), "State before unknown segment:");
         RCLCPP_INFO(this->get_logger(), "  t = %.2f s", time_before_unknown);
         RCLCPP_INFO(this->get_logger(), "  x = %.4f m", pos_before_unknown);
         RCLCPP_INFO(this->get_logger(), "  v = %.4f m/s", vel_before_unknown);
 
-        // ============================================
-        // STAP 2: Symbolische integratie van onbekende segment
-        // ============================================
+        // Step 2: Symbolic integration of unknown segment
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "Stap 2: Symbolische integratie (segment met onbekende T)");
+        RCLCPP_INFO(this->get_logger(), "Step 2: Symbolic integration (segment with unknown T)");
 
         double a_unknown = segments_[unknown_segment_idx].accel_x;
-        RCLCPP_INFO(this->get_logger(), "  Segment %d: a = %.4f, duur = T (onbekend)",
+        RCLCPP_INFO(this->get_logger(), "  Segment %d: a = %.4f, duration = T (unknown)",
             unknown_segment_idx + 1, a_unknown);
 
-        // Na dit segment:
-        // v_na = v_voor + a * T
-        // x_na = x_voor + v_voor * T + 0.5 * a * T^2
+        // After this segment:
+        // v_after = v_before + a * T
+        // x_after = x_before + v_before * T + 0.5 * a * T^2
         RCLCPP_INFO(this->get_logger(), "  v(T) = %.4f + %.4f * T", vel_before_unknown, a_unknown);
         RCLCPP_INFO(this->get_logger(), "  x(T) = %.4f + %.4f * T + 0.5 * %.4f * T^2",
             pos_before_unknown, vel_before_unknown, a_unknown);
 
-        // Symbolische snelheid en positie na onbekend segment (als functie van T)
+        // Symbolic velocity and position after unknown segment (as function of T)
         // vel_after = vel_before + a_unknown * T
         // pos_after = pos_before + vel_before * T + 0.5 * a_unknown * T^2
         SymbolicExpression vel_after_unknown(vel_before_unknown, a_unknown, 0.0);
         SymbolicExpression pos_after_unknown(pos_before_unknown, vel_before_unknown, 0.5 * a_unknown);
 
-        // ============================================
-        // STAP 3: Integreer segmenten NA de onbekende (symbolisch)
-        // ============================================
+        // Step 3: Integrate segments AFTER the unknown (symbolically)
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "Stap 3: Integreer segmenten ná onbekende (symbolisch)");
+        RCLCPP_INFO(this->get_logger(), "Step 3: Integrate segments after unknown (symbolically)");
 
         SymbolicExpression final_pos = pos_after_unknown;
         SymbolicExpression final_vel = vel_after_unknown;
 
         for (size_t i = unknown_segment_idx + 1; i < segments_.size(); ++i) {
-            // Parse de duur van dit segment
+            // Parse the duration of this segment
             double dt;
             if (segments_[i].start_is_unknown && segments_[i].end_is_unknown) {
-                // Beide zijn onbekend, maar relatief bekend (bijv. onbekend tot onbekend+10)
-                // Parse de offset
+                // Both are unknown, but relatively known (e.g., unknown to unknown+10)
+                // Parse the offset
                 std::regex r("onbekend_plus_(\\d+\\.?\\d*)");
                 std::smatch m;
                 if (std::regex_search(segments_[i].end_time_str, m, r)) {
@@ -462,12 +455,12 @@ private:
             RCLCPP_INFO(this->get_logger(), " ");
             RCLCPP_INFO(this->get_logger(), "  Segment %zu: dt=%.2f a=%.4f", i + 1, dt, a);
 
-            // Symbolische integratie:
-            // nieuwe_pos = oude_pos + oude_vel * dt + 0.5 * a * dt^2
-            // nieuwe_vel = oude_vel + a * dt
+            // Symbolic integration:
+            // new_pos = old_pos + old_vel * dt + 0.5 * a * dt^2
+            // new_vel = old_vel + a * dt
 
             // pos += vel * dt + 0.5 * a * dt^2
-            // Als vel = (v0, v1, v2) dan vel * dt = (v0*dt, v1*dt, v2*dt)
+            // If vel = (v0, v1, v2) then vel * dt = (v0*dt, v1*dt, v2*dt)
             SymbolicExpression delta_pos(
                 final_vel.a0 * dt + 0.5 * a * dt * dt,
                 final_vel.a1 * dt,
@@ -486,40 +479,38 @@ private:
                 final_vel.a0, final_vel.a1);
         }
 
-        // ============================================
-        // STAP 4: Los de vergelijking op
-        // ============================================
+        // Step 4: Solve the equation
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "Stap 4: Los vergelijking op");
+        RCLCPP_INFO(this->get_logger(), "Step 4: Solve equation");
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "  Eindpositie als functie van T:");
+        RCLCPP_INFO(this->get_logger(), "  Final position as function of T:");
         RCLCPP_INFO(this->get_logger(), "    x(T) = %.4f + %.4f*T + %.4f*T^2",
             final_pos.a0, final_pos.a1, final_pos.a2);
         RCLCPP_INFO(this->get_logger(), " ");
         RCLCPP_INFO(this->get_logger(), "  Constraint: x(T) = %.4f", target_position_x);
         RCLCPP_INFO(this->get_logger(), " ");
 
-        // Los op: a0 + a1*T + a2*T^2 = target
+        // Solve: a0 + a1*T + a2*T^2 = target
         // => a2*T^2 + a1*T + (a0 - target) = 0
         double A = final_pos.a2;
         double B = final_pos.a1;
         double C = final_pos.a0 - target_position_x;
 
-        RCLCPP_INFO(this->get_logger(), "  Vergelijking: %.4f*T^2 + %.4f*T + %.4f = 0", A, B, C);
+        RCLCPP_INFO(this->get_logger(), "  Equation: %.4f*T^2 + %.4f*T + %.4f = 0", A, B, C);
 
         double T_solved;
 
         if (std::abs(A) < 1e-10) {
-            // Lineaire vergelijking: B*T + C = 0
+            // Linear equation: B*T + C = 0
             if (std::abs(B) < 1e-10) {
-                RCLCPP_ERROR(this->get_logger(), "Geen oplossing mogelijk (0*T = %.4f)", -C);
+                RCLCPP_ERROR(this->get_logger(), "No solution possible (0*T = %.4f)", -C);
                 return false;
             }
             T_solved = -C / B;
             RCLCPP_INFO(this->get_logger(), " ");
-            RCLCPP_INFO(this->get_logger(), "  Lineaire vergelijking: T = -%.4f / %.4f = %.4f", C, B, T_solved);
+            RCLCPP_INFO(this->get_logger(), "  Linear equation: T = -%.4f / %.4f = %.4f", C, B, T_solved);
         } else {
-            // Kwadratische vergelijking: ABC-formule
+            // Quadratic equation: quadratic formula
             double discriminant = B * B - 4 * A * C;
 
             RCLCPP_INFO(this->get_logger(), " ");
@@ -527,7 +518,7 @@ private:
                 B, A, C, discriminant);
 
             if (discriminant < 0) {
-                RCLCPP_ERROR(this->get_logger(), "Geen reële oplossing (D < 0)");
+                RCLCPP_ERROR(this->get_logger(), "No real solution (D < 0)");
                 return false;
             }
 
@@ -537,28 +528,28 @@ private:
             RCLCPP_INFO(this->get_logger(), "  T1 = (-%.4f + sqrt(%.4f)) / (2*%.4f) = %.4f", B, discriminant, A, T1);
             RCLCPP_INFO(this->get_logger(), "  T2 = (-%.4f - sqrt(%.4f)) / (2*%.4f) = %.4f", B, discriminant, A, T2);
 
-            // Kies de positieve oplossing die fysisch zinvol is
+            // Choose the positive solution that is physically meaningful
             if (T1 >= 0 && T2 >= 0) {
-                T_solved = std::min(T1, T2);  // Neem de kleinste positieve
+                T_solved = std::min(T1, T2);  // Take the smallest positive
             } else if (T1 >= 0) {
                 T_solved = T1;
             } else if (T2 >= 0) {
                 T_solved = T2;
             } else {
-                RCLCPP_ERROR(this->get_logger(), "Geen positieve oplossing gevonden");
+                RCLCPP_ERROR(this->get_logger(), "No positive solution found");
                 return false;
             }
         }
 
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "===== OPLOSSING =====");
-        RCLCPP_INFO(this->get_logger(), "  T = %.4f seconden", T_solved);
+        RCLCPP_INFO(this->get_logger(), "SOLUTION");
+        RCLCPP_INFO(this->get_logger(), "  T = %.4f seconds", T_solved);
         RCLCPP_INFO(this->get_logger(), " ");
 
-        // Verificatie
+        // Verification
         double final_x = final_pos.evaluate(T_solved);
         double final_v = final_vel.evaluate(T_solved);
-        RCLCPP_INFO(this->get_logger(), "  Verificatie:");
+        RCLCPP_INFO(this->get_logger(), "  Verification:");
         RCLCPP_INFO(this->get_logger(), "    x(T=%.4f) = %.4f m (target: %.4f)", T_solved, final_x, target_position_x);
         RCLCPP_INFO(this->get_logger(), "    v(T=%.4f) = %.4f m/s", T_solved, final_v);
         RCLCPP_INFO(this->get_logger(), "    Error: %.6f m", std::abs(final_x - target_position_x));
@@ -606,7 +597,7 @@ private:
         std::string full_path = resolve_file_path(output_file_);
 
         YAML::Emitter out;
-        out << YAML::Comment("AUTO-GENERATED by path_solver (analytische integratie)");
+        out << YAML::Comment("AUTO-GENERATED by path_solver (analytical integration)");
         out << YAML::Comment("Original file: " + input_file_);
         out << YAML::Newline;
 
@@ -659,7 +650,7 @@ private:
     void print_solution_summary()
     {
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "========== SOLUTION SUMMARY ==========");
+        RCLCPP_INFO(this->get_logger(), "SOLUTION SUMMARY");
 
         double pos_x = initial_state_.position_x;
         double pos_y = initial_state_.position_y;
@@ -679,7 +670,7 @@ private:
                 i + 1, seg.start_time, seg.end_time, seg.accel_x, pos_x, vel_x);
         }
 
-        RCLCPP_INFO(this->get_logger(), "======================================");
+        RCLCPP_INFO(this->get_logger(), " ");
         RCLCPP_INFO(this->get_logger(), "Total duration: %.2f seconds", segments_.back().end_time);
         RCLCPP_INFO(this->get_logger(), "Final position: %.4f m", pos_x);
         RCLCPP_INFO(this->get_logger(), "Final velocity: %.4f m/s", vel_x);

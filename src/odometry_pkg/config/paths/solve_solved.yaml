@@ -2,7 +2,7 @@
 
 path:
   name: solve_example_solved
-  description: "Solved path: Voorbeeld met onbekende waarden die opgelost moeten worden"
+  description: "Solved path: Example with unknown values that have been solved"
   duration: 70.00091552734375
   sample_rate_hz: 100
 

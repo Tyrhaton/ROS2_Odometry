@@ -1,102 +1,99 @@
 # Path Solver YAML
-# Dit bestand bevat onbekende waarden die automatisch opgelost worden
-# Gebruik "onbekend" voor een enkele onbekende waarde
-# Gebruik "onbekend_1", "onbekend_2", etc. voor meerdere onbekenden
-# Run de solver met:
+# This file contains unknown values that are automatically solved
+# Use "unknown" for a single unknown value
+# Use "unknown_1", "unknown_2", etc. for multiple unknowns
+# Run the solver with:
 # ros2 run odometry_pkg path_solver --ros-args \           
 #   -p input_file:=/home/broodjesemih/school_shit_ros2/fix_imu_tilmann_assignment/ROS2_Odometry/src/odometry_pkg/config/paths/solve.yaml \
 #   -p output_file:=/home/broodjesemih/school_shit_ros2/fix_imu_tilmann_assignment/ROS2_Odometry/src/odometry_pkg/config/paths/solve_solved.yaml
 # 
 
-# Voorbeeld uit de foto:
-# 4 intervallen met a=0, a=0.01, a=0, a=-0.01
-# Interval 3 tijd is onbekend
-# Totale afstand x = 5 meter
+# Example from the assignment:
+# 4 intervals with a=0, a=0.01, a=0, a=-0.01
+# Interval 3 duration is unknown
+# Total distance x = 5 meters
 
 path:
   name: "solve_example"
-  description: "Voorbeeld met onbekende waarden die opgelost moeten worden"
+  description: "Example with unknown values that need to be solved"
 
-  # Initiële condities (bij t=0)
+  # Initial conditions (at t=0)
   initial_conditions:
     position_x: 0.0
     position_y: 0.0
     velocity_x: 0.0
     velocity_y: 0.0
 
-  # Constraints - wat moet er aan het einde waar zijn?
+  # Constraints - what must be true at the end?
   constraints:
-    # Totale afstand in x-richting moet 5 meter zijn
+    # Total distance in x-direction must be 5 meters
     - type: final_position_x
       value: 5.0
-    # Eindsnelheid moet 0 zijn (tot stilstand komen)
+    # Final velocity must be 0 (come to a stop)
     - type: final_velocity_x
       value: 0.0
 
   segments:
-    # Segment 1: stilstand (a=0 voor 10 sec)
+    # Segment 1: standstill (a=0 for 10 sec)
     - interval: [0.0, 10.0]
       type: constant
       accel_x: 0.0
       accel_y: 0.0
       accel_z: 0.0
 
-    # Segment 2: acceleratie (a=0.01 voor 10 sec)
+    # Segment 2: acceleration (a=0.01 for 10 sec)
     - interval: [10.0, 20.0]
       type: constant
       accel_x: 0.01
       accel_y: 0.0
       accel_z: 0.0
 
-    # Segment 3: cruise (a=0) - TIJD IS ONBEKEND
-    # Start bij t=20, eind is onbekend
+    # Segment 3: cruise (a=0) - DURATION IS UNKNOWN
+    # Starts at t=20, end is unknown
     - interval: [20.0, onbekend]
       type: constant
       accel_x: 0.0
       accel_y: 0.0
       accel_z: 0.0
 
-    # Segment 4: remmen (a=-0.01 voor 10 sec)
-    # Start is afhankelijk van vorige segment
+    # Segment 4: braking (a=-0.01 for 10 sec)
+    # Start depends on previous segment
     - interval: [onbekend, onbekend_plus_10]
       type: constant
       accel_x: -0.01
       accel_y: 0.0
       accel_z: 0.0
 
-# =============================================================================
-# HOE DE SOLVER WERKT:
-# =============================================================================
+# HOW THE SOLVER WORKS:
 #
-# Kinematische vergelijkingen:
-#   v(t) = v0 + a * t                    (snelheid)
-#   x(t) = x0 + v0 * t + 0.5 * a * t^2   (positie)
+# Kinematic equations:
+#   v(t) = v0 + a * t                    (velocity)
+#   x(t) = x0 + v0 * t + 0.5 * a * t^2   (position)
 #
-# Segment 1 (t=0 tot t=10, a=0):
+# Segment 1 (t=0 to t=10, a=0):
 #   v(10) = 0 + 0 * 10 = 0 m/s
 #   x(10) = 0 + 0 * 10 + 0 = 0 m
 #
-# Segment 2 (t=10 tot t=20, a=0.01):
+# Segment 2 (t=10 to t=20, a=0.01):
 #   v(20) = 0 + 0.01 * 10 = 0.1 m/s
 #   x(20) = 0 + 0 * 10 + 0.5 * 0.01 * 10^2 = 0.5 m
 #
-# Segment 3 (t=20 tot t=20+T, a=0) waar T=onbekend:
-#   v(20+T) = 0.1 + 0 * T = 0.1 m/s  (snelheid blijft constant)
+# Segment 3 (t=20 to t=20+T, a=0) where T=unknown:
+#   v(20+T) = 0.1 + 0 * T = 0.1 m/s  (velocity stays constant)
 #   x(20+T) = 0.5 + 0.1 * T + 0 = 0.5 + 0.1*T m
 #
-# Segment 4 (t=20+T tot t=30+T, a=-0.01):
-#   v_eind = 0.1 + (-0.01) * 10 = 0 m/s  (check: eindsnelheid = 0)
-#   x_eind = (0.5 + 0.1*T) + 0.1 * 10 + 0.5 * (-0.01) * 10^2
+# Segment 4 (t=20+T to t=30+T, a=-0.01):
+#   v_end = 0.1 + (-0.01) * 10 = 0 m/s  (check: final velocity = 0)
+#   x_end = (0.5 + 0.1*T) + 0.1 * 10 + 0.5 * (-0.01) * 10^2
 #          = 0.5 + 0.1*T + 1 - 0.5
 #          = 1 + 0.1*T
 #
-# Constraint: x_eind = 5 meter
+# Constraint: x_end = 5 meters
 #   1 + 0.1*T = 5
 #   0.1*T = 4
-#   T = 40 seconden
+#   T = 40 seconds
 #
-# OPLOSSING: Het onbekende interval is 40 seconden
-# Segment 3 loopt van t=20 tot t=60
-# Segment 4 loopt van t=60 tot t=70
-# Totale tijd: 70 seconden
-# =============================================================================
+# SOLUTION: The unknown interval is 40 seconds
+# Segment 3 runs from t=20 to t=60
+# Segment 4 runs from t=60 to t=70
+# Total time: 70 seconds

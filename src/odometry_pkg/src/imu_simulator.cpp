@@ -532,7 +532,7 @@ private:
         // Handle looping if enabled
         if (loop_ && sim_time_ >= total_duration_) {
             sim_time_ = 0.0;
-            RCLCPP_INFO(this->get_logger(), "═══ LOOP: Restarting from t=0 ═══");
+            RCLCPP_INFO(this->get_logger(), "LOOP: Restarting from t=0");
         }
         
         // Get acceleration at current time

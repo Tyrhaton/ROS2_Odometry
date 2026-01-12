@@ -16,8 +16,8 @@
         output_file:=config/paths/my_solved.yaml
 
     The solver supports:
-    - "onbekend" for a single unknown value
-    - "onbekend_1", "onbekend_2", etc. for multiple unknowns
+    - "unknown" (or "onbekend") for a single unknown value
+    - "unknown_1", "unknown_2", etc. for multiple unknowns
     - "onbekend_plus_X" for relative offsets (e.g., onbekend_plus_10 = onbekend + 10)
 
     Constraints:
