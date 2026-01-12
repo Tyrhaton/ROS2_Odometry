@@ -117,6 +117,13 @@ struct TimeSegment {
     VelocityProfile velocity_y;  // Y-axis velocity profile (m/s)
     VelocityProfile omega;       // Angular velocity profile (rad/s)
     
+    // Direct wheel velocity profiles
+    bool use_wheel_velocities = false;
+    VelocityProfile wheel_fl;
+    VelocityProfile wheel_fr;
+    VelocityProfile wheel_rl;
+    VelocityProfile wheel_rr;
+    
     /**
      * @brief Check if a given time falls within this segment
      */
@@ -304,7 +311,16 @@ private:
         
         double segment_duration = seg.end_time - seg.start_time;
         
-        // Parse velocity profiles
+        // Parse ALL velocity profiles (Additive Logic)
+        // Defaults to 0.0 if not present in YAML
+        
+        // Direct wheel velocities
+        seg.wheel_fl = parse_velocity_profile(seg_node, "velocity_fl", segment_duration);
+        seg.wheel_fr = parse_velocity_profile(seg_node, "velocity_fr", segment_duration);
+        seg.wheel_rl = parse_velocity_profile(seg_node, "velocity_rl", segment_duration);
+        seg.wheel_rr = parse_velocity_profile(seg_node, "velocity_rr", segment_duration);
+        
+        // Chassis velocities
         seg.velocity_x = parse_velocity_profile(seg_node, "velocity_x", segment_duration);
         seg.velocity_y = parse_velocity_profile(seg_node, "velocity_y", segment_duration);
         seg.omega = parse_velocity_profile(seg_node, "omega", segment_duration);
@@ -456,30 +472,63 @@ private:
     }
     
     /**
-     * @brief Calculate velocity at current simulation time
+     * @brief Calculate wheel velocities at current simulation time
+     * Combines Chassis (IK) and Direct Wheel inputs (Additive)
      */
-    void get_velocity_at_time(double t, double& vx, double& vy, double& omega) const
+    void get_velocities_at_time(double t, double& w1, double& w2, double& w3, double& w4, 
+                              double& vx, double& vy, double& omega) const
     {
         const TimeSegment* segment = find_segment_at_time(t);
         
         if (!segment) {
+            w1 = w2 = w3 = w4 = 0.0;
             vx = vy = omega = 0.0;
             return;
         }
         
         // Calculate time relative to segment start
         double t_rel = t - segment->start_time;
+
+        // 1. Calculate Base Control (Inverse Kinematics from Chassis commands)
+        double base_vx = segment->velocity_x.evaluate(t_rel);
+        double base_vy = segment->velocity_y.evaluate(t_rel);
+        double base_omega = segment->omega.evaluate(t_rel);
         
-        // Evaluate each axis using its profile
-        vx = segment->velocity_x.evaluate(t_rel);
-        vy = segment->velocity_y.evaluate(t_rel);
-        omega = segment->omega.evaluate(t_rel);
+        double lx = wheel_base_x_ / 2.0;
+        double ly = wheel_base_y_ / 2.0;
+        double k = lx + ly;
+        double r = wheel_radius_;
+
+        double w1_base = (base_vx - base_vy - k * base_omega) / r;  // FL
+        double w2_base = (base_vx + base_vy + k * base_omega) / r;  // FR
+        double w3_base = (base_vx - base_vy + k * base_omega) / r;  // RR
+        double w4_base = (base_vx + base_vy - k * base_omega) / r;  // RL
+
+        // 2. Get Direct Wheel Inputs (w3=RR, w4=RL to match IK convention)
+        double w1_direct = segment->wheel_fl.evaluate(t_rel);
+        double w2_direct = segment->wheel_fr.evaluate(t_rel);
+        double w3_direct = segment->wheel_rr.evaluate(t_rel);
+        double w4_direct = segment->wheel_rl.evaluate(t_rel);
+
+        // 3. Combine (Additive mixing)
+        w1 = w1_base + w1_direct;
+        w2 = w2_base + w2_direct;
+        w3 = w3_base + w3_direct;
+        w4 = w4_base + w4_direct;
+            
+        // 4. Calculate Effective Chassis Velocity (Forward Kinematics) for logging
+        vx = (w1 + w2 + w3 + w4) * r / 4.0;
+        vy = (-w1 + w2 + w3 - w4) * r / 4.0;
+        omega = (-w1 + w2 - w3 + w4) * r / (4.0 * k);
     }
     
     //
     // TIMER CALLBACKS
     //
     
+    /**
+     * @brief Main timer callback - called at publish_rate_hz
+     */
     /**
      * @brief Main timer callback - called at publish_rate_hz
      */
@@ -491,11 +540,17 @@ private:
             RCLCPP_INFO(this->get_logger(), "═══ LOOP: Restarting from t=0 ═══");
         }
         
-        // Get velocity at current time
+        // Get velocities at current time
+        double w1, w2, w3, w4;
         double vx, vy, omega;
-        get_velocity_at_time(sim_time_, vx, vy, omega);
+        get_velocities_at_time(sim_time_, w1, w2, w3, w4, vx, vy, omega);
         
         // Round to specified decimal places
+        w1 = std::round(w1 * rounding_factor_) / rounding_factor_;
+        w2 = std::round(w2 * rounding_factor_) / rounding_factor_;
+        w3 = std::round(w3 * rounding_factor_) / rounding_factor_;
+        w4 = std::round(w4 * rounding_factor_) / rounding_factor_;
+        
         vx = std::round(vx * rounding_factor_) / rounding_factor_;
         vy = std::round(vy * rounding_factor_) / rounding_factor_;
         omega = std::round(omega * rounding_factor_) / rounding_factor_;
@@ -504,16 +559,17 @@ private:
         auto current_time = this->now();
         
         // Publish mecanum wheel data
-        publish_mecanum_data(vx, vy, omega, current_time);
+        publish_mecanum_data(w1, w2, w3, w4, current_time);
         
         // Log status every 2 seconds
         log_counter_++;
         if (log_counter_ >= rate_hz_ * 2) {
             const TimeSegment* seg = find_segment_at_time(sim_time_);
             if (seg) {
+                // Log all calculated velocities
                 RCLCPP_INFO(this->get_logger(), 
-                    "[t=%5.1fs] LAGRANGE | vx=%+.3f  vy=%+.3f  ω=%+.3f",
-                    sim_time_, vx, vy, omega);
+                    "[t=%5.1fs] vx=%+.2f vy=%+.2f ω=%+.2f | W(%+.1f, %+.1f, %+.1f, %+.1f)",
+                    sim_time_, vx, vy, omega, w1, w2, w3, w4);
             }
             log_counter_ = 0;
         }
@@ -557,19 +613,11 @@ private:
     /**
      * @brief Publish mecanum wheel data
      */
-    void publish_mecanum_data(double vx, double vy, double omega, const rclcpp::Time& stamp)
+    /**
+     * @brief Publish mecanum wheel data
+     */
+    void publish_mecanum_data(double w1, double w2, double w3, double w4, const rclcpp::Time& stamp)
     {
-        // Calculate mecanum wheel velocities using inverse kinematics
-        double lx = wheel_base_x_ / 2.0;
-        double ly = wheel_base_y_ / 2.0;
-        double k = lx + ly;
-        double r = wheel_radius_;
-
-        double w1 = (vx - vy - k * omega) / r;  // FL
-        double w2 = (vx + vy + k * omega) / r;  // FR
-        double w3 = (vx - vy + k * omega) / r;  // RR
-        double w4 = (vx + vy - k * omega) / r;  // RL
-
         // Update wheel angles
         wheel_angles_[0] += w1 * dt_;
         wheel_angles_[1] += w2 * dt_;

@@ -407,3 +407,172 @@ ros2 launch odometry_pkg yaml_path_simulator.launch.xml \
   path_file:=config/paths/my_custom_path.yaml \
   sensor_type:=imu
 ```
+
+---
+
+## Mecanum Velocity Path Configuration
+
+The mecanum simulator supports multiple velocity input formats, giving you flexibility to define constant speeds, linear ramps, quadratic profiles, or direct wheel control.
+
+### Velocity Input Formats
+
+Each segment in a mecanum path file uses an `interval: [start, end]` to define the time range. Within that interval, you can specify velocities in four different ways:
+
+#### 1. Constant Velocity (Scalar)
+
+Simple constant velocity throughout the interval:
+
+```yaml
+- interval: [0.0, 5.0]
+  velocity_x: 0.3    # Constant 0.3 m/s forward
+  velocity_y: 0.0    # No lateral movement
+  omega: 0.0         # No rotation
+```
+
+#### 2. Linear Velocity (Ramp)
+
+Velocity changes linearly over time: `v(t) = m * t_rel + b`
+
+Where `t_rel = t - t_start` (time relative to segment start).
+
+```yaml
+- interval: [2.0, 5.0]
+  velocity_x:
+    m: 0.1   # Slope: acceleration of 0.1 m/s per second
+    b: 0.0   # Starting velocity at segment start
+  velocity_y: 0.0
+  omega: 0.0
+```
+
+**Example calculation:** At `t = 4.0` (so `t_rel = 2.0`):
+`velocity_x = 0.1 * 2.0 + 0.0 = 0.2 m/s`
+
+#### 3. Quadratic Velocity (Curve)
+
+Velocity follows a quadratic profile: `v(t) = a * t_rel² + b * t_rel + c`
+
+```yaml
+- interval: [20.0, 25.0]
+  velocity_x:
+    a: -0.01    # Quadratic coefficient (negative = deceleration curve)
+    b: -0.02    # Linear coefficient
+    c: 0.3      # Starting velocity
+  velocity_y: 0.0
+  omega: 0.0
+```
+
+**Use cases:**
+- Smooth acceleration/deceleration profiles
+- S-curve motion approximations
+- Non-linear speed ramps
+
+#### 4. Direct Wheel Velocities
+
+Control each wheel individually (bypasses kinematics calculation):
+
+```yaml
+- interval: [10.0, 15.0]
+  omega: 0.0           # Angular velocity (can be combined)
+  velocity_fl: 3.0     # Front Left wheel
+  velocity_fr: -3.0    # Front Right wheel
+  velocity_rl: 3.0     # Rear Left wheel
+  velocity_rr: -3.0    # Rear Right wheel
+```
+
+**Wheel velocity signs:**
+- Positive = wheel rotates forward
+- Negative = wheel rotates backward
+
+**Common patterns:**
+| Motion | FL | FR | RL | RR |
+|--------|-----|-----|-----|-----|
+| Forward | + | + | + | + |
+| Backward | - | - | - | - |
+| Strafe Right | + | - | - | + |
+| Strafe Left | - | + | + | - |
+| Rotate CW | + | - | + | - |
+| Rotate CCW | - | + | - | + |
+
+### Complete Example Path
+
+```yaml
+path:
+  name: "demo_path"
+  duration: 30.0
+  sample_rate_hz: 50
+
+  segments:
+    # Stand still (constant)
+    - interval: [0.0, 2.0]
+      velocity_x: 0.0
+      velocity_y: 0.0
+      omega: 0.0
+
+    # Accelerate forward (linear ramp)
+    - interval: [2.0, 5.0]
+      velocity_x:
+        m: 0.1
+        b: 0.0
+      velocity_y: 0.0
+      omega: 0.0
+
+    # Cruise at constant speed
+    - interval: [5.0, 10.0]
+      velocity_x: 0.3
+      velocity_y: 0.0
+      omega: 0.0
+
+    # Direct wheel control (strafe)
+    - interval: [10.0, 15.0]
+      omega: 0.0
+      velocity_fl: 3.0
+      velocity_fr: -3.0
+      velocity_rl: 3.0
+      velocity_rr: -3.0
+
+    # Circular motion (constant + rotation)
+    - interval: [15.0, 20.0]
+      velocity_x: 0.3
+      velocity_y: 0.0
+      omega: 0.4
+
+    # Smooth deceleration (quadratic)
+    - interval: [20.0, 25.0]
+      velocity_x:
+        a: -0.01
+        b: -0.02
+        c: 0.3
+      velocity_y: 0.0
+      omega: 0.0
+
+    # Stop
+    - interval: [25.0, 30.0]
+      velocity_x: 0.0
+      velocity_y: 0.0
+      omega: 0.0
+```
+
+### Velocity Parameters Reference
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `velocity_x` | scalar/linear/quadratic | Forward velocity (m/s). Positive = forward |
+| `velocity_y` | scalar/linear/quadratic | Lateral velocity (m/s). Positive = left |
+| `omega` | scalar | Angular velocity (rad/s). Positive = counter-clockwise |
+| `velocity_fl` | scalar | Front Left wheel velocity (rad/s) |
+| `velocity_fr` | scalar | Front Right wheel velocity (rad/s) |
+| `velocity_rl` | scalar | Rear Left wheel velocity (rad/s) |
+| `velocity_rr` | scalar | Rear Right wheel velocity (rad/s) |
+
+### Launch Commands
+
+```bash
+# Standard mecanum simulation
+ros2 launch odometry_pkg yaml_path_mecanum.launch.xml \
+  path_file:=config/paths/mecanum_velocity_path.yaml
+
+# With custom interval and precision
+ros2 launch odometry_pkg yaml_path_mecanum.launch.xml \
+  path_file:=config/paths/mecanum_velocity_path.yaml \
+  interval:=10 decimals:=6
+```

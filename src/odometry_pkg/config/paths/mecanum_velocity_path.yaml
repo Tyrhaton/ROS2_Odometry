@@ -36,17 +36,21 @@ path:
       velocity_y: 0.0
       omega: 0.0
 
-    # Phase 4: Strafe right while moving forward
+    # Phase 4: Strafe right while moving forward 
+    # Omega creates rotation, Wheel inputs create translation/motion.
+    # Additive logic sums them up.
     - interval: [10.0, 15.0]
-      velocity_x: 0.2
-      velocity_y: 0.2
-      omega: 0.0
+      omega: 0.0 # Angular velocity
+      velocity_fl: 3.0 # Front Left
+      velocity_fr: -3.0 # Front Right
+      velocity_rl: -3.0 # Rear Left
+      velocity_rr: 3.0 # Rear Right
 
-    # Phase 5: Rotate while moving (circular motion)
+    # Phase 5: Rotate while moving (circular motion) - Standard keys
     - interval: [15.0, 20.0]
-      velocity_x: 0.3
-      velocity_y: 0.0
-      omega: 0.4
+      velocity_x: 0.3 # Linear velocity
+      velocity_y: 0.0 # Linear velocity
+      omega: 0.4 # Angular velocity
 
     # Phase 6: Decelerate with quadratic profile
     - interval: [20.0, 25.0]
