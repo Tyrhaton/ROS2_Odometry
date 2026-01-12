@@ -1,22 +1,27 @@
 /**
  * @file path_solver.cpp
- * @brief Path Solver - Lost automatisch onbekende waarden op in path definities
+ * @brief Path Solver - Lost automatisch onbekende waarden op via analytische integratie
  *
  * Dit programma leest een YAML-bestand met "onbekend" waarden en lost deze op
- * met behulp van kinematische vergelijkingen en constraints.
+ * door de kinematische vergelijkingen symbolisch te integreren.
  *
- * Ondersteunde onbekenden:
- * - interval tijden (onbekend, onbekend_1, onbekend_2, etc.)
- * - acceleratie waarden
- *
- * Constraints:
- * - final_position_x/y: eindpositie
- * - final_velocity_x/y: eindsnelheid
- * - total_duration: totale tijd
+ * METHODE: Analytische integratie
+ * ================================
  *
  * Kinematische vergelijkingen (constante acceleratie):
- *   v(t) = v0 + a * t
- *   x(t) = x0 + v0 * t + 0.5 * a * t^2
+ *   v(t) = v0 + a * t                    (integraal van a)
+ *   x(t) = x0 + v0 * t + 0.5 * a * t^2   (integraal van v)
+ *
+ * Voor elk segment berekenen we de bijdrage aan positie en snelheid.
+ * Als een segment duur T onbekend is, krijgen we een vergelijking in T.
+ *
+ * Voorbeeld:
+ *   Segment met a=0, duur=T, beginsnelheid=v0:
+ *   - Δv = a * T = 0
+ *   - Δx = v0 * T + 0.5 * a * T^2 = v0 * T
+ *
+ *   Dit geeft: x_eind = x_begin + v0 * T
+ *   Als x_eind bekend is: T = (x_eind - x_begin) / v0
  *
  * @author Group g1
  * @date 2026-01-12
@@ -44,7 +49,6 @@ using namespace std::chrono_literals;
  * @brief Parsed segment data (may contain unknowns)
  */
 struct SegmentData {
-    // Interval times (can be "onbekend" strings initially)
     std::string start_time_str;
     std::string end_time_str;
     double start_time{0.0};
@@ -52,7 +56,6 @@ struct SegmentData {
     bool start_is_unknown{false};
     bool end_is_unknown{false};
 
-    // Acceleration values (can be "onbekend" strings initially)
     std::string accel_x_str;
     std::string accel_y_str;
     double accel_x{0.0};
@@ -60,7 +63,6 @@ struct SegmentData {
     bool accel_x_is_unknown{false};
     bool accel_y_is_unknown{false};
 
-    // Type
     std::string type{"constant"};
 };
 
@@ -86,29 +88,57 @@ struct Constraint {
 };
 
 /**
+ * @struct SymbolicExpression
+ * @brief Represents a polynomial expression in T: a0 + a1*T + a2*T^2
+ *
+ * Dit wordt gebruikt om symbolisch te integreren zonder numerieke waarde voor T
+ */
+struct SymbolicExpression {
+    double a0{0.0};  // Constante term
+    double a1{0.0};  // Coëfficiënt van T
+    double a2{0.0};  // Coëfficiënt van T^2
+
+    SymbolicExpression() = default;
+    SymbolicExpression(double c) : a0(c), a1(0), a2(0) {}
+    SymbolicExpression(double c0, double c1, double c2) : a0(c0), a1(c1), a2(c2) {}
+
+    // Evalueer voor gegeven T
+    double evaluate(double T) const {
+        return a0 + a1 * T + a2 * T * T;
+    }
+
+    // Optellen
+    SymbolicExpression operator+(const SymbolicExpression& other) const {
+        return SymbolicExpression(a0 + other.a0, a1 + other.a1, a2 + other.a2);
+    }
+
+    // Vermenigvuldigen met constante
+    SymbolicExpression operator*(double c) const {
+        return SymbolicExpression(a0 * c, a1 * c, a2 * c);
+    }
+};
+
+/**
  * @class PathSolver
- * @brief Solves for unknown values in path definitions
+ * @brief Solves for unknown values in path definitions using analytical integration
  */
 class PathSolver : public rclcpp::Node
 {
 public:
     PathSolver() : Node("path_solver")
     {
-        // PARAMETER SETUP
         declare_and_get_parameters();
 
-        // LOAD AND SOLVE
         if (!load_solve_yaml()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to load solve YAML file");
             return;
         }
 
-        if (!solve_unknowns()) {
+        if (!solve_by_integration()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to solve unknowns");
             return;
         }
 
-        // OUTPUT SOLVED PATH
         if (!write_solved_yaml()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to write solved YAML file");
             return;
@@ -117,7 +147,6 @@ public:
         RCLCPP_INFO(this->get_logger(), "Path solved successfully!");
         RCLCPP_INFO(this->get_logger(), "Output written to: %s", output_file_.c_str());
 
-        // Print summary
         print_solution_summary();
     }
 
@@ -130,7 +159,6 @@ private:
         input_file_ = this->get_parameter("input_file").as_string();
         output_file_ = this->get_parameter("output_file").as_string();
 
-        // Default output: input_file with "_solved" suffix
         if (output_file_.empty()) {
             size_t dot_pos = input_file_.rfind('.');
             if (dot_pos != std::string::npos) {
@@ -157,32 +185,20 @@ private:
         }
     }
 
-    /**
-     * @brief Check if a string represents an unknown value
-     */
     bool is_unknown(const std::string& value) const
     {
-        // Match "onbekend", "onbekend_1", "onbekend_plus_10", etc.
         return value.find("onbekend") != std::string::npos;
     }
 
-    /**
-     * @brief Parse interval value (could be number or "onbekend")
-     */
     std::pair<double, bool> parse_interval_value(const YAML::Node& node)
     {
         try {
-            // Try to parse as double first
             return {node.as<double>(), false};
         } catch (...) {
-            // It's a string (onbekend)
             return {0.0, true};
         }
     }
 
-    /**
-     * @brief Load the solve YAML file
-     */
     bool load_solve_yaml()
     {
         std::string full_path = resolve_file_path(input_file_);
@@ -198,11 +214,9 @@ private:
 
             YAML::Node path = config["path"];
 
-            // Store path name and description
             path_name_ = path["name"] ? path["name"].as<std::string>() : "solved_path";
             path_description_ = path["description"] ? path["description"].as<std::string>() : "";
 
-            // Parse initial conditions
             if (path["initial_conditions"]) {
                 auto ic = path["initial_conditions"];
                 initial_state_.position_x = ic["position_x"] ? ic["position_x"].as<double>() : 0.0;
@@ -215,7 +229,6 @@ private:
                 initial_state_.position_x, initial_state_.position_y,
                 initial_state_.velocity_x, initial_state_.velocity_y);
 
-            // Parse constraints
             if (path["constraints"]) {
                 for (const auto& c : path["constraints"]) {
                     Constraint constraint;
@@ -228,7 +241,6 @@ private:
                 }
             }
 
-            // Parse segments
             if (!path["segments"]) {
                 RCLCPP_ERROR(this->get_logger(), "YAML must contain 'segments' array");
                 return false;
@@ -237,7 +249,6 @@ private:
             for (const auto& seg_node : path["segments"]) {
                 SegmentData seg;
 
-                // Parse interval
                 auto interval = seg_node["interval"];
                 auto [start, start_unknown] = parse_interval_value(interval[0]);
                 auto [end, end_unknown] = parse_interval_value(interval[1]);
@@ -247,7 +258,6 @@ private:
                 seg.start_is_unknown = start_unknown;
                 seg.end_is_unknown = end_unknown;
 
-                // Store string representation for unknowns
                 if (start_unknown) {
                     seg.start_time_str = interval[0].as<std::string>();
                 }
@@ -255,10 +265,8 @@ private:
                     seg.end_time_str = interval[1].as<std::string>();
                 }
 
-                // Parse type
                 seg.type = seg_node["type"] ? seg_node["type"].as<std::string>() : "constant";
 
-                // Parse accelerations
                 if (seg_node["accel_x"]) {
                     try {
                         seg.accel_x = seg_node["accel_x"].as<double>();
@@ -279,13 +287,11 @@ private:
 
                 segments_.push_back(seg);
 
-                RCLCPP_INFO(this->get_logger(), "Segment %zu: [%s, %s] a=(%.3f, %.3f) unknowns: start=%d end=%d ax=%d ay=%d",
+                RCLCPP_INFO(this->get_logger(), "Segment %zu: [%s, %s] a=(%.3f, %.3f)",
                     segments_.size(),
                     start_unknown ? seg.start_time_str.c_str() : std::to_string(start).c_str(),
                     end_unknown ? seg.end_time_str.c_str() : std::to_string(end).c_str(),
-                    seg.accel_x, seg.accel_y,
-                    seg.start_is_unknown, seg.end_is_unknown,
-                    seg.accel_x_is_unknown, seg.accel_y_is_unknown);
+                    seg.accel_x, seg.accel_y);
             }
 
             return true;
@@ -297,350 +303,310 @@ private:
     }
 
     /**
-     * @brief Simulate kinematics for a segment with constant acceleration
-     * @param state Input state (will be modified to output state)
-     * @param accel_x X acceleration
-     * @param accel_y Y acceleration
-     * @param duration Segment duration
+     * @brief Integreer segment met constante acceleratie
+     *
+     * v(t) = v0 + a * dt        ->  Δv = a * dt
+     * x(t) = x0 + v0*dt + 0.5*a*dt^2  ->  Δx = v0*dt + 0.5*a*dt^2
      */
-    void simulate_segment(KinematicState& state, double accel_x, double accel_y, double duration)
+    void integrate_segment(double& pos_x, double& pos_y, double& vel_x, double& vel_y,
+                          double accel_x, double accel_y, double duration)
     {
-        // Kinematic equations:
-        // v(t) = v0 + a * t
-        // x(t) = x0 + v0 * t + 0.5 * a * t^2
+        // Positie update (met huidige snelheid)
+        pos_x += vel_x * duration + 0.5 * accel_x * duration * duration;
+        pos_y += vel_y * duration + 0.5 * accel_y * duration * duration;
 
-        double v0x = state.velocity_x;
-        double v0y = state.velocity_y;
-
-        // Update position
-        state.position_x += v0x * duration + 0.5 * accel_x * duration * duration;
-        state.position_y += v0y * duration + 0.5 * accel_y * duration * duration;
-
-        // Update velocity
-        state.velocity_x += accel_x * duration;
-        state.velocity_y += accel_y * duration;
-
-        // Update time
-        state.time += duration;
+        // Snelheid update
+        vel_x += accel_x * duration;
+        vel_y += accel_y * duration;
     }
 
     /**
-     * @brief Calculate final state given a value for the unknown
+     * @brief Los op via analytische integratie
+     *
+     * Strategie:
+     * 1. Integreer alle bekende segmenten vóór de onbekende
+     * 2. Stel symbolische vergelijking op voor segment met onbekende T
+     * 3. Integreer alle segmenten ná de onbekende (hun bijdrage hangt mogelijk af van T)
+     * 4. Los de vergelijking op: target = f(T)
      */
-    KinematicState calculate_final_state(double unknown_value)
+    bool solve_by_integration()
     {
-        KinematicState state = initial_state_;
-        double current_time = 0.0;
+        RCLCPP_INFO(this->get_logger(), " ");
+        RCLCPP_INFO(this->get_logger(), "===== ANALYTISCHE INTEGRATIE =====");
 
+        // Vind segment met onbekende tijd
+        int unknown_segment_idx = -1;
         for (size_t i = 0; i < segments_.size(); ++i) {
-            auto& seg = segments_[i];
-
-            // Determine segment start time
-            double seg_start;
-            if (seg.start_is_unknown) {
-                // Parse the unknown expression
-                if (seg.start_time_str == "onbekend") {
-                    seg_start = unknown_value;
-                } else {
-                    seg_start = current_time;  // Use current time
-                }
-            } else {
-                seg_start = seg.start_time;
-            }
-
-            // Determine segment end time
-            double seg_end;
-            if (seg.end_is_unknown) {
-                if (seg.end_time_str == "onbekend") {
-                    seg_end = unknown_value;
-                } else if (seg.end_time_str.find("onbekend_plus_") != std::string::npos) {
-                    // Parse "onbekend_plus_X" format
-                    std::regex r("onbekend_plus_(\\d+\\.?\\d*)");
-                    std::smatch m;
-                    if (std::regex_search(seg.end_time_str, m, r)) {
-                        double offset = std::stod(m[1].str());
-                        seg_end = unknown_value + offset;
-                    } else {
-                        seg_end = unknown_value + 10.0;  // Default offset
-                    }
-                } else {
-                    seg_end = unknown_value;
-                }
-            } else {
-                seg_end = seg.end_time;
-            }
-
-            double duration = seg_end - seg_start;
-            if (duration <= 0) continue;
-
-            // Simulate this segment
-            simulate_segment(state, seg.accel_x, seg.accel_y, duration);
-            current_time = seg_end;
-        }
-
-        return state;
-    }
-
-    /**
-     * @brief Solve for unknowns using binary search or analytical solution
-     */
-    bool solve_unknowns()
-    {
-        // Count unknowns
-        int num_unknown_times = 0;
-        int unknown_segment_index = -1;
-
-        for (size_t i = 0; i < segments_.size(); ++i) {
-            if (segments_[i].start_is_unknown || segments_[i].end_is_unknown) {
-                num_unknown_times++;
-                unknown_segment_index = i;
+            if (segments_[i].end_is_unknown) {
+                unknown_segment_idx = static_cast<int>(i);
+                break;
             }
         }
 
-        RCLCPP_INFO(this->get_logger(), "Found %d segments with unknown times", num_unknown_times);
-
-        if (num_unknown_times == 0) {
-            RCLCPP_INFO(this->get_logger(), "No unknowns to solve - path is complete");
+        if (unknown_segment_idx == -1) {
+            RCLCPP_INFO(this->get_logger(), "Geen onbekende gevonden - path is compleet");
             return true;
         }
 
-        // For now, we support single unknown time (can be extended)
-        if (num_unknown_times > 1) {
-            RCLCPP_WARN(this->get_logger(),
-                "Multiple unknown times detected - using constraint-based solver");
-        }
-
-        // Find the constraint to use for solving
-        double target_value = 0.0;
-        std::string constraint_type = "";
-
+        // Vind constraint
+        double target_position_x = 0.0;
+        bool has_position_constraint = false;
         for (const auto& c : constraints_) {
             if (c.type == "final_position_x") {
-                constraint_type = "position_x";
-                target_value = c.value;
-                break;
-            } else if (c.type == "final_position_y") {
-                constraint_type = "position_y";
-                target_value = c.value;
-                break;
-            } else if (c.type == "final_velocity_x") {
-                constraint_type = "velocity_x";
-                target_value = c.value;
-                break;
-            } else if (c.type == "final_velocity_y") {
-                constraint_type = "velocity_y";
-                target_value = c.value;
+                target_position_x = c.value;
+                has_position_constraint = true;
                 break;
             }
         }
 
-        if (constraint_type.empty()) {
-            RCLCPP_ERROR(this->get_logger(), "No usable constraint found for solving");
+        if (!has_position_constraint) {
+            RCLCPP_ERROR(this->get_logger(), "Geen final_position_x constraint gevonden");
             return false;
         }
 
-        RCLCPP_INFO(this->get_logger(), "Solving for unknown using constraint: %s = %.4f",
-            constraint_type.c_str(), target_value);
+        RCLCPP_INFO(this->get_logger(), "Target positie: x = %.4f m", target_position_x);
+        RCLCPP_INFO(this->get_logger(), "Onbekende in segment %d", unknown_segment_idx + 1);
 
-        // Try analytical solution first for simple cases
-        if (try_analytical_solution(constraint_type, target_value)) {
-            return true;
+        // ============================================
+        // STAP 1: Integreer segmenten VOOR de onbekende
+        // ============================================
+        double pos_x = initial_state_.position_x;
+        double pos_y = initial_state_.position_y;
+        double vel_x = initial_state_.velocity_x;
+        double vel_y = initial_state_.velocity_y;
+        double time = 0.0;
+
+        RCLCPP_INFO(this->get_logger(), " ");
+        RCLCPP_INFO(this->get_logger(), "Stap 1: Integreer bekende segmenten vóór onbekende");
+        RCLCPP_INFO(this->get_logger(), "  Start: t=%.2f x=%.4f v=%.4f", time, pos_x, vel_x);
+
+        for (int i = 0; i < unknown_segment_idx; ++i) {
+            double dt = segments_[i].end_time - segments_[i].start_time;
+            double a = segments_[i].accel_x;
+
+            RCLCPP_INFO(this->get_logger(), " ");
+            RCLCPP_INFO(this->get_logger(), "  Segment %d: dt=%.2f a=%.4f", i + 1, dt, a);
+            RCLCPP_INFO(this->get_logger(), "    v(t) = v0 + a*t = %.4f + %.4f*%.2f = %.4f",
+                vel_x, a, dt, vel_x + a * dt);
+            RCLCPP_INFO(this->get_logger(), "    x(t) = x0 + v0*t + 0.5*a*t^2 = %.4f + %.4f*%.2f + 0.5*%.4f*%.2f^2 = %.4f",
+                pos_x, vel_x, dt, a, dt, pos_x + vel_x * dt + 0.5 * a * dt * dt);
+
+            integrate_segment(pos_x, pos_y, vel_x, vel_y, a, segments_[i].accel_y, dt);
+            time = segments_[i].end_time;
+
+            RCLCPP_INFO(this->get_logger(), "    Na segment: t=%.2f x=%.4f v=%.4f", time, pos_x, vel_x);
         }
 
-        // Fall back to binary search
-        return solve_by_binary_search(constraint_type, target_value);
-    }
+        // Sla state op vóór onbekende segment
+        double pos_before_unknown = pos_x;
+        double vel_before_unknown = vel_x;
+        double time_before_unknown = time;
 
-    /**
-     * @brief Try to solve analytically for simple cases
-     */
-    bool try_analytical_solution(const std::string& constraint_type, double target_value)
-    {
-        // This works for the specific case in the example:
-        // Segments with known accelerations, one unknown duration
-        // We can derive T directly from the kinematic equations
+        RCLCPP_INFO(this->get_logger(), " ");
+        RCLCPP_INFO(this->get_logger(), "State vóór onbekende segment:");
+        RCLCPP_INFO(this->get_logger(), "  t = %.2f s", time_before_unknown);
+        RCLCPP_INFO(this->get_logger(), "  x = %.4f m", pos_before_unknown);
+        RCLCPP_INFO(this->get_logger(), "  v = %.4f m/s", vel_before_unknown);
 
-        // First, find segments with and without unknowns
-        std::vector<size_t> known_segments;
-        std::vector<size_t> unknown_segments;
+        // ============================================
+        // STAP 2: Symbolische integratie van onbekende segment
+        // ============================================
+        RCLCPP_INFO(this->get_logger(), " ");
+        RCLCPP_INFO(this->get_logger(), "Stap 2: Symbolische integratie (segment met onbekende T)");
 
-        for (size_t i = 0; i < segments_.size(); ++i) {
-            if (segments_[i].start_is_unknown || segments_[i].end_is_unknown) {
-                unknown_segments.push_back(i);
+        double a_unknown = segments_[unknown_segment_idx].accel_x;
+        RCLCPP_INFO(this->get_logger(), "  Segment %d: a = %.4f, duur = T (onbekend)",
+            unknown_segment_idx + 1, a_unknown);
+
+        // Na dit segment:
+        // v_na = v_voor + a * T
+        // x_na = x_voor + v_voor * T + 0.5 * a * T^2
+        RCLCPP_INFO(this->get_logger(), "  v(T) = %.4f + %.4f * T", vel_before_unknown, a_unknown);
+        RCLCPP_INFO(this->get_logger(), "  x(T) = %.4f + %.4f * T + 0.5 * %.4f * T^2",
+            pos_before_unknown, vel_before_unknown, a_unknown);
+
+        // Symbolische snelheid en positie na onbekend segment (als functie van T)
+        // vel_after = vel_before + a_unknown * T
+        // pos_after = pos_before + vel_before * T + 0.5 * a_unknown * T^2
+        SymbolicExpression vel_after_unknown(vel_before_unknown, a_unknown, 0.0);
+        SymbolicExpression pos_after_unknown(pos_before_unknown, vel_before_unknown, 0.5 * a_unknown);
+
+        // ============================================
+        // STAP 3: Integreer segmenten NA de onbekende (symbolisch)
+        // ============================================
+        RCLCPP_INFO(this->get_logger(), " ");
+        RCLCPP_INFO(this->get_logger(), "Stap 3: Integreer segmenten ná onbekende (symbolisch)");
+
+        SymbolicExpression final_pos = pos_after_unknown;
+        SymbolicExpression final_vel = vel_after_unknown;
+
+        for (size_t i = unknown_segment_idx + 1; i < segments_.size(); ++i) {
+            // Parse de duur van dit segment
+            double dt;
+            if (segments_[i].start_is_unknown && segments_[i].end_is_unknown) {
+                // Beide zijn onbekend, maar relatief bekend (bijv. onbekend tot onbekend+10)
+                // Parse de offset
+                std::regex r("onbekend_plus_(\\d+\\.?\\d*)");
+                std::smatch m;
+                if (std::regex_search(segments_[i].end_time_str, m, r)) {
+                    dt = std::stod(m[1].str());
+                } else {
+                    dt = 10.0;  // Default
+                }
             } else {
-                known_segments.push_back(i);
+                dt = segments_[i].end_time - segments_[i].start_time;
             }
+
+            double a = segments_[i].accel_x;
+
+            RCLCPP_INFO(this->get_logger(), " ");
+            RCLCPP_INFO(this->get_logger(), "  Segment %zu: dt=%.2f a=%.4f", i + 1, dt, a);
+
+            // Symbolische integratie:
+            // nieuwe_pos = oude_pos + oude_vel * dt + 0.5 * a * dt^2
+            // nieuwe_vel = oude_vel + a * dt
+
+            // pos += vel * dt + 0.5 * a * dt^2
+            // Als vel = (v0, v1, v2) dan vel * dt = (v0*dt, v1*dt, v2*dt)
+            SymbolicExpression delta_pos(
+                final_vel.a0 * dt + 0.5 * a * dt * dt,
+                final_vel.a1 * dt,
+                final_vel.a2 * dt
+            );
+
+            final_pos = final_pos + delta_pos;
+
+            // vel += a * dt
+            final_vel.a0 += a * dt;
+
+            RCLCPP_INFO(this->get_logger(), "    Δx = v*dt + 0.5*a*dt^2");
+            RCLCPP_INFO(this->get_logger(), "    x(T) = %.4f + %.4f*T + %.4f*T^2",
+                final_pos.a0, final_pos.a1, final_pos.a2);
+            RCLCPP_INFO(this->get_logger(), "    v(T) = %.4f + %.4f*T",
+                final_vel.a0, final_vel.a1);
         }
 
-        if (unknown_segments.size() != 1) {
-            return false;  // Can't do simple analytical solution
-        }
+        // ============================================
+        // STAP 4: Los de vergelijking op
+        // ============================================
+        RCLCPP_INFO(this->get_logger(), " ");
+        RCLCPP_INFO(this->get_logger(), "Stap 4: Los vergelijking op");
+        RCLCPP_INFO(this->get_logger(), " ");
+        RCLCPP_INFO(this->get_logger(), "  Eindpositie als functie van T:");
+        RCLCPP_INFO(this->get_logger(), "    x(T) = %.4f + %.4f*T + %.4f*T^2",
+            final_pos.a0, final_pos.a1, final_pos.a2);
+        RCLCPP_INFO(this->get_logger(), " ");
+        RCLCPP_INFO(this->get_logger(), "  Constraint: x(T) = %.4f", target_position_x);
+        RCLCPP_INFO(this->get_logger(), " ");
 
-        size_t unknown_idx = unknown_segments[0];
+        // Los op: a0 + a1*T + a2*T^2 = target
+        // => a2*T^2 + a1*T + (a0 - target) = 0
+        double A = final_pos.a2;
+        double B = final_pos.a1;
+        double C = final_pos.a0 - target_position_x;
 
-        // Calculate state at start of unknown segment
-        KinematicState state_before = initial_state_;
-        double time_before_unknown = 0.0;
+        RCLCPP_INFO(this->get_logger(), "  Vergelijking: %.4f*T^2 + %.4f*T + %.4f = 0", A, B, C);
 
-        for (size_t i = 0; i < unknown_idx; ++i) {
-            double duration = segments_[i].end_time - segments_[i].start_time;
-            simulate_segment(state_before, segments_[i].accel_x, segments_[i].accel_y, duration);
-            time_before_unknown = segments_[i].end_time;
-        }
+        double T_solved;
 
-        RCLCPP_INFO(this->get_logger(), "State before unknown segment: pos=(%.4f, %.4f) vel=(%.4f, %.4f)",
-            state_before.position_x, state_before.position_y,
-            state_before.velocity_x, state_before.velocity_y);
-
-        // Calculate contributions of segments after the unknown (they have known durations relative to unknown)
-        // For the example: segment 4 has duration 10s and a=-0.01
-        double accel_unknown = segments_[unknown_idx].accel_x;
-
-        // Contribution from unknown segment: position += v * T + 0.5 * a * T^2
-        // But velocity changes too, which affects later segments
-
-        // For now, use binary search as it's more general
-        return false;
-    }
-
-    /**
-     * @brief Solve using binary search
-     */
-    bool solve_by_binary_search(const std::string& constraint_type, double target_value)
-    {
-        // Binary search for the unknown value
-        double low = 0.0;
-        double high = 1000.0;  // Max 1000 seconds
-        double tolerance = 0.0001;  // 0.1ms precision
-        int max_iterations = 100;
-
-        // First, find the last known time to set as minimum
-        for (const auto& seg : segments_) {
-            if (!seg.end_is_unknown) {
-                low = std::max(low, seg.end_time);
+        if (std::abs(A) < 1e-10) {
+            // Lineaire vergelijking: B*T + C = 0
+            if (std::abs(B) < 1e-10) {
+                RCLCPP_ERROR(this->get_logger(), "Geen oplossing mogelijk (0*T = %.4f)", -C);
+                return false;
             }
-        }
+            T_solved = -C / B;
+            RCLCPP_INFO(this->get_logger(), " ");
+            RCLCPP_INFO(this->get_logger(), "  Lineaire vergelijking: T = -%.4f / %.4f = %.4f", C, B, T_solved);
+        } else {
+            // Kwadratische vergelijking: ABC-formule
+            double discriminant = B * B - 4 * A * C;
 
-        RCLCPP_INFO(this->get_logger(), "Binary search range: [%.2f, %.2f]", low, high);
+            RCLCPP_INFO(this->get_logger(), " ");
+            RCLCPP_INFO(this->get_logger(), "  Discriminant D = B^2 - 4AC = %.4f^2 - 4*%.4f*%.4f = %.4f",
+                B, A, C, discriminant);
 
-        // Check bounds
-        auto state_low = calculate_final_state(low);
-        auto state_high = calculate_final_state(high);
+            if (discriminant < 0) {
+                RCLCPP_ERROR(this->get_logger(), "Geen reële oplossing (D < 0)");
+                return false;
+            }
 
-        double value_low = get_state_value(state_low, constraint_type);
-        double value_high = get_state_value(state_high, constraint_type);
+            double T1 = (-B + std::sqrt(discriminant)) / (2 * A);
+            double T2 = (-B - std::sqrt(discriminant)) / (2 * A);
 
-        RCLCPP_INFO(this->get_logger(), "At T=%.2f: %s = %.4f", low, constraint_type.c_str(), value_low);
-        RCLCPP_INFO(this->get_logger(), "At T=%.2f: %s = %.4f", high, constraint_type.c_str(), value_high);
+            RCLCPP_INFO(this->get_logger(), "  T1 = (-%.4f + sqrt(%.4f)) / (2*%.4f) = %.4f", B, discriminant, A, T1);
+            RCLCPP_INFO(this->get_logger(), "  T2 = (-%.4f - sqrt(%.4f)) / (2*%.4f) = %.4f", B, discriminant, A, T2);
 
-        // Check if solution is in range
-        if ((value_low - target_value) * (value_high - target_value) > 0) {
-            // Try extending the range
-            high = 10000.0;
-            state_high = calculate_final_state(high);
-            value_high = get_state_value(state_high, constraint_type);
-
-            if ((value_low - target_value) * (value_high - target_value) > 0) {
-                RCLCPP_ERROR(this->get_logger(),
-                    "No solution found in range [%.2f, %.2f]. Values: [%.4f, %.4f], target: %.4f",
-                    low, high, value_low, value_high, target_value);
+            // Kies de positieve oplossing die fysisch zinvol is
+            if (T1 >= 0 && T2 >= 0) {
+                T_solved = std::min(T1, T2);  // Neem de kleinste positieve
+            } else if (T1 >= 0) {
+                T_solved = T1;
+            } else if (T2 >= 0) {
+                T_solved = T2;
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "Geen positieve oplossing gevonden");
                 return false;
             }
         }
 
-        // Binary search
-        for (int iter = 0; iter < max_iterations; ++iter) {
-            double mid = (low + high) / 2.0;
-            auto state_mid = calculate_final_state(mid);
-            double value_mid = get_state_value(state_mid, constraint_type);
+        RCLCPP_INFO(this->get_logger(), " ");
+        RCLCPP_INFO(this->get_logger(), "===== OPLOSSING =====");
+        RCLCPP_INFO(this->get_logger(), "  T = %.4f seconden", T_solved);
+        RCLCPP_INFO(this->get_logger(), " ");
 
-            if (std::abs(value_mid - target_value) < tolerance) {
-                solved_unknown_value_ = mid;
-                RCLCPP_INFO(this->get_logger(),
-                    "SOLVED! Unknown time T = %.4f seconds (iteration %d)", mid, iter);
-                RCLCPP_INFO(this->get_logger(),
-                    "Final state: pos=(%.4f, %.4f) vel=(%.4f, %.4f)",
-                    state_mid.position_x, state_mid.position_y,
-                    state_mid.velocity_x, state_mid.velocity_y);
+        // Verificatie
+        double final_x = final_pos.evaluate(T_solved);
+        double final_v = final_vel.evaluate(T_solved);
+        RCLCPP_INFO(this->get_logger(), "  Verificatie:");
+        RCLCPP_INFO(this->get_logger(), "    x(T=%.4f) = %.4f m (target: %.4f)", T_solved, final_x, target_position_x);
+        RCLCPP_INFO(this->get_logger(), "    v(T=%.4f) = %.4f m/s", T_solved, final_v);
+        RCLCPP_INFO(this->get_logger(), "    Error: %.6f m", std::abs(final_x - target_position_x));
 
-                apply_solution(mid);
-                return true;
-            }
+        // Apply solution
+        solved_unknown_value_ = T_solved;
+        apply_solution(time_before_unknown + T_solved);
 
-            if ((value_low - target_value) * (value_mid - target_value) < 0) {
-                high = mid;
-                value_high = value_mid;
-            } else {
-                low = mid;
-                value_low = value_mid;
-            }
-        }
-
-        RCLCPP_ERROR(this->get_logger(), "Binary search did not converge after %d iterations", max_iterations);
-        return false;
+        return true;
     }
 
-    double get_state_value(const KinematicState& state, const std::string& type)
+    void apply_solution(double unknown_end_time)
     {
-        if (type == "position_x") return state.position_x;
-        if (type == "position_y") return state.position_y;
-        if (type == "velocity_x") return state.velocity_x;
-        if (type == "velocity_y") return state.velocity_y;
-        return 0.0;
-    }
-
-    /**
-     * @brief Apply the solved value to segments
-     */
-    void apply_solution(double unknown_value)
-    {
-        double current_time = 0.0;
-
         for (size_t i = 0; i < segments_.size(); ++i) {
             auto& seg = segments_[i];
 
-            // Update start time
-            if (seg.start_is_unknown) {
-                if (seg.start_time_str == "onbekend") {
-                    seg.start_time = unknown_value;
-                } else {
-                    seg.start_time = current_time;
-                }
-                seg.start_is_unknown = false;
-            }
-
-            // Update end time
             if (seg.end_is_unknown) {
                 if (seg.end_time_str == "onbekend") {
-                    seg.end_time = unknown_value;
-                } else if (seg.end_time_str.find("onbekend_plus_") != std::string::npos) {
-                    std::regex r("onbekend_plus_(\\d+\\.?\\d*)");
-                    std::smatch m;
-                    if (std::regex_search(seg.end_time_str, m, r)) {
-                        double offset = std::stod(m[1].str());
-                        seg.end_time = unknown_value + offset;
-                    } else {
-                        seg.end_time = unknown_value + 10.0;
-                    }
-                } else {
-                    seg.end_time = unknown_value;
+                    seg.end_time = unknown_end_time;
                 }
                 seg.end_is_unknown = false;
             }
 
-            current_time = seg.end_time;
+            if (seg.start_is_unknown) {
+                if (seg.start_time_str == "onbekend") {
+                    seg.start_time = unknown_end_time;
+                }
+                seg.start_is_unknown = false;
+            }
+
+            // Handle onbekend_plus_X format
+            if (seg.end_time_str.find("onbekend_plus_") != std::string::npos) {
+                std::regex r("onbekend_plus_(\\d+\\.?\\d*)");
+                std::smatch m;
+                if (std::regex_search(seg.end_time_str, m, r)) {
+                    double offset = std::stod(m[1].str());
+                    seg.end_time = unknown_end_time + offset;
+                }
+            }
         }
     }
 
-    /**
-     * @brief Write the solved YAML to output file
-     */
     bool write_solved_yaml()
     {
         std::string full_path = resolve_file_path(output_file_);
 
         YAML::Emitter out;
-        out << YAML::Comment("AUTO-GENERATED by path_solver");
+        out << YAML::Comment("AUTO-GENERATED by path_solver (analytische integratie)");
         out << YAML::Comment("Original file: " + input_file_);
         out << YAML::Newline;
 
@@ -648,11 +614,9 @@ private:
         out << YAML::Key << "path";
         out << YAML::Value << YAML::BeginMap;
 
-        // Name and description
         out << YAML::Key << "name" << YAML::Value << path_name_ + "_solved";
         out << YAML::Key << "description" << YAML::Value << "Solved path: " + path_description_;
 
-        // Duration (calculated from last segment end time)
         double duration = 0.0;
         for (const auto& seg : segments_) {
             duration = std::max(duration, seg.end_time);
@@ -660,27 +624,19 @@ private:
         out << YAML::Key << "duration" << YAML::Value << duration;
         out << YAML::Key << "sample_rate_hz" << YAML::Value << 100;
 
-        // Segments
         out << YAML::Key << "segments";
         out << YAML::Value << YAML::BeginSeq;
 
         for (const auto& seg : segments_) {
             out << YAML::BeginMap;
-
-            // Interval
             out << YAML::Key << "interval";
             out << YAML::Value << YAML::Flow << YAML::BeginSeq;
             out << seg.start_time << seg.end_time;
             out << YAML::EndSeq;
-
-            // Type
             out << YAML::Key << "type" << YAML::Value << seg.type;
-
-            // Accelerations
             out << YAML::Key << "accel_x" << YAML::Value << seg.accel_x;
             out << YAML::Key << "accel_y" << YAML::Value << seg.accel_y;
             out << YAML::Key << "accel_z" << YAML::Value << 0.0;
-
             out << YAML::EndMap;
         }
 
@@ -688,7 +644,6 @@ private:
         out << YAML::EndMap;
         out << YAML::EndMap;
 
-        // Write to file
         std::ofstream fout(full_path);
         if (!fout.is_open()) {
             RCLCPP_ERROR(this->get_logger(), "Could not open output file: %s", full_path.c_str());
@@ -703,41 +658,38 @@ private:
 
     void print_solution_summary()
     {
-        RCLCPP_INFO(this->get_logger(), "");
+        RCLCPP_INFO(this->get_logger(), " ");
         RCLCPP_INFO(this->get_logger(), "========== SOLUTION SUMMARY ==========");
 
-        KinematicState state = initial_state_;
-        double current_time = 0.0;
+        double pos_x = initial_state_.position_x;
+        double pos_y = initial_state_.position_y;
+        double vel_x = initial_state_.velocity_x;
+        double vel_y = initial_state_.velocity_y;
 
-        RCLCPP_INFO(this->get_logger(), "Initial: t=%.2f pos=(%.4f, %.4f) vel=(%.4f, %.4f)",
-            current_time, state.position_x, state.position_y, state.velocity_x, state.velocity_y);
+        RCLCPP_INFO(this->get_logger(), "Initial: t=%.2f x=%.4f v=%.4f", 0.0, pos_x, vel_x);
 
         for (size_t i = 0; i < segments_.size(); ++i) {
             const auto& seg = segments_[i];
-            double duration = seg.end_time - seg.start_time;
+            double dt = seg.end_time - seg.start_time;
 
-            simulate_segment(state, seg.accel_x, seg.accel_y, duration);
+            integrate_segment(pos_x, pos_y, vel_x, vel_y, seg.accel_x, seg.accel_y, dt);
 
             RCLCPP_INFO(this->get_logger(),
-                "Segment %zu [%.2f, %.2f]: a=(%.4f, %.4f) -> pos=(%.4f, %.4f) vel=(%.4f, %.4f)",
-                i + 1, seg.start_time, seg.end_time, seg.accel_x, seg.accel_y,
-                state.position_x, state.position_y, state.velocity_x, state.velocity_y);
+                "Segment %zu [%.2f, %.2f]: a=%.4f -> x=%.4f v=%.4f",
+                i + 1, seg.start_time, seg.end_time, seg.accel_x, pos_x, vel_x);
         }
 
         RCLCPP_INFO(this->get_logger(), "======================================");
         RCLCPP_INFO(this->get_logger(), "Total duration: %.2f seconds", segments_.back().end_time);
-        RCLCPP_INFO(this->get_logger(), "Final position: (%.4f, %.4f) m", state.position_x, state.position_y);
-        RCLCPP_INFO(this->get_logger(), "Final velocity: (%.4f, %.4f) m/s", state.velocity_x, state.velocity_y);
+        RCLCPP_INFO(this->get_logger(), "Final position: %.4f m", pos_x);
+        RCLCPP_INFO(this->get_logger(), "Final velocity: %.4f m/s", vel_x);
 
-        // Verify constraints
-        RCLCPP_INFO(this->get_logger(), "");
+        RCLCPP_INFO(this->get_logger(), " ");
         RCLCPP_INFO(this->get_logger(), "Constraint verification:");
         for (const auto& c : constraints_) {
             double actual = 0.0;
-            if (c.type == "final_position_x") actual = state.position_x;
-            else if (c.type == "final_position_y") actual = state.position_y;
-            else if (c.type == "final_velocity_x") actual = state.velocity_x;
-            else if (c.type == "final_velocity_y") actual = state.velocity_y;
+            if (c.type == "final_position_x") actual = pos_x;
+            else if (c.type == "final_velocity_x") actual = vel_x;
 
             double error = std::abs(actual - c.value);
             const char* status = error < 0.001 ? "OK" : "FAIL";
@@ -746,18 +698,13 @@ private:
         }
     }
 
-    // Configuration
     std::string input_file_;
     std::string output_file_;
-
-    // Path data
     std::string path_name_;
     std::string path_description_;
     KinematicState initial_state_;
     std::vector<Constraint> constraints_;
     std::vector<SegmentData> segments_;
-
-    // Solution
     double solved_unknown_value_{0.0};
 };
 
@@ -767,7 +714,6 @@ int main(int argc, char** argv)
 
     try {
         auto node = std::make_shared<PathSolver>();
-        // Single execution - no spin needed for solver
         rclcpp::shutdown();
     } catch (const std::exception& e) {
         RCLCPP_ERROR(rclcpp::get_logger("path_solver"),
