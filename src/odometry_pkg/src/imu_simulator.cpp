@@ -23,6 +23,7 @@
 #include "sensor_msgs/msg/imu.hpp"
 #include "geometry_msgs/msg/accel_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include <yaml-cpp/yaml.h>
 
@@ -167,6 +168,8 @@ public:
             "/simulator/acceleration", 10);
         reset_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             "/position/corrected", 10);
+        segment_info_pub_ = this->create_publisher<std_msgs::msg::Int32MultiArray>(
+            "/simulator/segment_info", 10);
         
         // CREATE TIMERS
         // Main timer for publishing IMU data
@@ -549,6 +552,9 @@ private:
         rclcpp::Time timestamp = rclcpp::Time(static_cast<int64_t>(sim_time_ * 1e9), RCL_ROS_TIME);
         publish_imu_message(ax, ay, az, timestamp);
         
+        // Publish segment info (current segment number and total)
+        publish_segment_info();
+        
         // Log status every 2 seconds
         log_counter_++;
         if (log_counter_ >= rate_hz_ * 2) {
@@ -632,6 +638,29 @@ private:
         accel_pub_->publish(accel_msg);
     }
     
+    /**
+     * @brief Publish current segment info for visualization
+     */
+    void publish_segment_info()
+    {
+        auto msg = std_msgs::msg::Int32MultiArray();
+        msg.data.resize(2);
+        
+        // Find current segment index (1-indexed for display)
+        int current_seg = 1;
+        for (size_t i = 0; i < segments_.size(); ++i) {
+            if (segments_[i].contains_time(sim_time_)) {
+                current_seg = static_cast<int>(i + 1);
+                break;
+            }
+        }
+        
+        msg.data[0] = current_seg;
+        msg.data[1] = static_cast<int>(segments_.size());
+        
+        segment_info_pub_->publish(msg);
+    }
+    
     //
     // UTILITY FUNCTIONS
     //
@@ -661,6 +690,7 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
     rclcpp::Publisher<geometry_msgs::msg::AccelStamped>::SharedPtr accel_pub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr reset_pub_;
+    rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr segment_info_pub_;
     
     // ROS timers
     rclcpp::TimerBase::SharedPtr timer_;

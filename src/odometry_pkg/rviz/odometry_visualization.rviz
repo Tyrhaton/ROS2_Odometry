@@ -119,6 +119,19 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /odometry/position_labels
       Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Status Label
+      Namespaces:
+        status_label: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /odometry/status_label
+      Value: true
     - Class: rviz_default_plugins/TF
       Enabled: true
       Filter (blacklist): ""

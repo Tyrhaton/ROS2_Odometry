@@ -2,7 +2,7 @@
 <robot name="mecanum_robot">
   <!-- Materials -->
   <material name="chassis_color">
-    <color rgba="0.1 0.4 0.8 1.0"/>
+    <color rgba="0.4 0.4 0.4 1.0"/>
   </material>
   <material name="wheel_color">
     <color rgba="0.1 0.1 0.1 1.0"/>

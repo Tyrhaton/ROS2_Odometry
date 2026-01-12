@@ -25,6 +25,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include <yaml-cpp/yaml.h>
@@ -154,6 +155,8 @@ public:
             "/joint_states", 10);
         reset_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             "/position/corrected", 10);
+        segment_info_pub_ = this->create_publisher<std_msgs::msg::Int32MultiArray>(
+            "/simulator/segment_info", 10);
         
         // CREATE TIMERS
         double timer_period_ms = 1000.0 / rate_hz_;
@@ -561,6 +564,9 @@ private:
         // Publish mecanum wheel data
         publish_mecanum_data(w1, w2, w3, w4, current_time);
         
+        // Publish segment info for visualization
+        publish_segment_info();
+        
         // Log status every 2 seconds
         log_counter_++;
         if (log_counter_ >= rate_hz_ * 2) {
@@ -638,6 +644,29 @@ private:
         joint_state_pub_->publish(js);
     }
     
+    /**
+     * @brief Publish current segment info for visualization
+     */
+    void publish_segment_info()
+    {
+        auto msg = std_msgs::msg::Int32MultiArray();
+        msg.data.resize(2);
+        
+        // Find current segment index (1-indexed for display)
+        int current_seg = 1;
+        for (size_t i = 0; i < segments_.size(); ++i) {
+            if (segments_[i].contains_time(sim_time_)) {
+                current_seg = static_cast<int>(i + 1);
+                break;
+            }
+        }
+        
+        msg.data[0] = current_seg;
+        msg.data[1] = static_cast<int>(segments_.size());
+        
+        segment_info_pub_->publish(msg);
+    }
+    
     //
     // MEMBER VARIABLES
     //
@@ -665,6 +694,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr wheel_vel_pub_;
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr reset_pub_;
+    rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr segment_info_pub_;
     
     // ROS timers
     rclcpp::TimerBase::SharedPtr timer_;
