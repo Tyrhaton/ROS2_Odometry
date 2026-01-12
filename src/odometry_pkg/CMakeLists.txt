@@ -88,6 +88,14 @@ ament_target_dependencies(position_visualizer
   ament_index_cpp
 )
 
+# 7. Path Solver (C++) - Solves for unknown values in path definitions
+add_executable(path_solver src/path_solver.cpp)
+ament_target_dependencies(path_solver
+  rclcpp
+  ament_index_cpp
+)
+target_link_libraries(path_solver yaml-cpp)
+
 # Install executables
 install(TARGETS
   position_velocity_approximator
@@ -96,6 +104,7 @@ install(TARGETS
   imu_simulator
   mecanum_simulator
   position_visualizer
+  path_solver
   DESTINATION lib/${PROJECT_NAME}
 )
 

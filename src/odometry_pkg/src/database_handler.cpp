@@ -381,13 +381,13 @@ private:
         // CSV export - write EVERY message without filtering
         if (enable_csv_export_ && velocity_csv_.is_open()) {
             rclcpp::Time msg_time(msg->header.stamp);
-            
-            // Calculate relative time from start for proper time values
-            double relative_time = (msg_time - start_time_).seconds();
+
+            // Use message timestamp directly (simulator uses sim_time starting from 0)
+            double relative_time = msg_time.seconds();
             velocity_csv_ << relative_time << ","
-                        << msg->twist.linear.x << "," 
-                        << msg->twist.linear.y << "," 
-                        << msg->twist.linear.z << "," 
+                        << msg->twist.linear.x << ","
+                        << msg->twist.linear.y << ","
+                        << msg->twist.linear.z << ","
                         << msg->twist.angular.z << "\n";
             velocity_csv_.flush();
         }
@@ -431,13 +431,13 @@ private:
         // CSV export - write EVERY message without filtering
         if (enable_csv_export_ && position_csv_.is_open()) {
             rclcpp::Time msg_time(msg->header.stamp);
-            
-            // Calculate relative time from start for proper time values
-            double relative_time = (msg_time - start_time_).seconds();
+
+            // Use message timestamp directly (simulator uses sim_time starting from 0)
+            double relative_time = msg_time.seconds();
             position_csv_ << relative_time << ","
-                        << msg->pose.pose.position.x << "," 
-                        << msg->pose.pose.position.y << "," 
-                        << msg->pose.pose.position.z << "," 
+                        << msg->pose.pose.position.x << ","
+                        << msg->pose.pose.position.y << ","
+                        << msg->pose.pose.position.z << ","
                         << alpha << "\n";
             position_csv_.flush();
         }

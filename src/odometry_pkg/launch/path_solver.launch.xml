@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<launch>
+  <!--
+    Path Solver Launch File
+
+    Solves for unknown values in path definitions using kinematic equations.
+
+    Usage:
+      # Solve the example file:
+      ros2 launch odometry_pkg path_solver.launch.xml \
+        input_file:=config/paths/solve.yaml
+
+      # Specify custom output file:
+      ros2 launch odometry_pkg path_solver.launch.xml \
+        input_file:=config/paths/solve.yaml \
+        output_file:=config/paths/my_solved.yaml
+
+    The solver supports:
+    - "onbekend" for a single unknown value
+    - "onbekend_1", "onbekend_2", etc. for multiple unknowns
+    - "onbekend_plus_X" for relative offsets (e.g., onbekend_plus_10 = onbekend + 10)
+
+    Constraints:
+    - final_position_x/y: Target final position
+    - final_velocity_x/y: Target final velocity
+  -->
+
+  <!-- Arguments -->
+  <arg name="input_file" default="config/paths/solve.yaml"
+       description="Input YAML file with unknowns (relative to package share or absolute)" />
+  <arg name="output_file" default=""
+       description="Output YAML file (default: input_file with _solved suffix)" />
+
+  <let name="pkg_share" value="$(find-pkg-share odometry_pkg)" />
+
+  <!-- Path Solver Node -->
+  <node pkg="odometry_pkg" exec="path_solver"
+        name="path_solver" output="screen">
+    <param name="input_file" value="$(var pkg_share)/$(var input_file)" />
+    <param name="output_file" value="$(var output_file)" />
+  </node>
+</launch>
